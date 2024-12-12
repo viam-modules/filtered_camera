@@ -12,6 +12,9 @@ This allows you to:
 
 This module also allows you to specifcy a time window for syncing the data captured in the N seconds before the capture criteria were met.
 
+> [!NOTE]  
+> For a tutorial on filtering data with this module, see [Selectively capture data using filtered-camera](https:docs.viam.com/tutorials/projects/filtered-camera/).
+
 ## Configure your filtered camera
 
 > [!NOTE]  
