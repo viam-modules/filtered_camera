@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/edaniels/golog"
-
+	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
+	"go.viam.com/rdk/services/vision"
 	viz "go.viam.com/rdk/vision"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
+	"go.viam.com/rdk/vision/viscapture"
 
 	"go.viam.com/test"
 )
@@ -78,6 +79,15 @@ func (s *dummyVisionService) GetObjectPointClouds(ctx context.Context, cameraNam
 	panic(1)
 }
 
+func (s *dummyVisionService) CaptureAllFromCamera(context.Context, string, viscapture.CaptureOptions, map[string]interface{}) (viscapture.VisCapture, error) {
+
+	panic(1)
+}
+
+func (s *dummyVisionService) GetProperties(context.Context, map[string]interface{}) (*vision.Properties, error) {
+	panic(1)
+}
+
 var (
 	a = image.NewGray(image.Rect(1, 1, 1, 1))
 	b = image.NewGray(image.Rect(2, 1, 1, 1))
@@ -88,7 +98,7 @@ var (
 )
 
 func TestShouldSend(t *testing.T) {
-	logger := golog.NewTestLogger(t)
+	logger := logging.NewTestLogger(t)
 
 	fc := &filteredCamera{
 		conf: &Config{
@@ -139,7 +149,7 @@ func TestShouldSend(t *testing.T) {
 }
 
 func TestWindow(t *testing.T) {
-	logger := golog.NewTestLogger(t)
+	logger := logging.NewTestLogger(t)
 
 	fc := &filteredCamera{
 		conf: &Config{
