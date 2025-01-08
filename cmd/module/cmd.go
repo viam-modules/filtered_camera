@@ -6,17 +6,24 @@ import (
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/module"
+	"go.viam.com/rdk/resource"
 
 	"github.com/erh/filtered_camera"
+	"github.com/erh/filtered_camera/conditional_camera"
 )
 
 func main() {
-	err := realMain()
+	err := realMain(camera.API, filtered_camera.Model)
+	if err != nil {
+		panic(err)
+	}
+	err = realMain(camera.API, conditional_camera.Model)
 	if err != nil {
 		panic(err)
 	}
 }
-func realMain() error {
+
+func realMain(api resource.API, model resource.Model) error {
 
 	ctx := context.Background()
 	logger := logging.NewDebugLogger("client")
@@ -26,7 +33,7 @@ func realMain() error {
 		return err
 	}
 
-	err = myMod.AddModelFromRegistry(ctx, camera.API, filtered_camera.Model)
+	err = myMod.AddModelFromRegistry(ctx, api, model)
 	if err != nil {
 		return err
 	}
