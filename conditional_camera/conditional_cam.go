@@ -26,9 +26,6 @@ type Config struct {
 	Camera        string
 	FilterSvc     string
 	WindowSeconds int `json:"window_seconds"`
-
-	Classifications map[string]float64
-	Objects         map[string]float64
 }
 
 
@@ -91,16 +88,16 @@ type conditionalCamera struct {
 	captureTill time.Time
 }
 
-func (fc *conditionalCamera) Name() resource.Name {
-	return fc.name
+func (cc *conditionalCamera) Name() resource.Name {
+	return cc.name
 }
 
-func (fc *conditionalCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
+func (cc *conditionalCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	return nil, resource.ErrDoUnimplemented
 }
 
-func (fc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := fc.cam.Images(ctx)
+func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	images, meta, err := cc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
 	}
@@ -111,7 +108,7 @@ func (fc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 	}
 
 	for _, img := range images {
-		shouldSend, err := fc.shouldSend(ctx, img.Image)
+		shouldSend, err := cc.shouldSend(ctx, img.Image)
 		if err != nil {
 			return nil, meta, err
 		}
@@ -121,47 +118,47 @@ func (fc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 		}
 	}
 
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
 
-	fc.addToBuffer_inlock(images, meta)
+	cc.addToBuffer_inlock(images, meta)
 
-	if len(fc.toSend) > 0 {
-		x := fc.toSend[0]
-		fc.toSend = fc.toSend[1:]
+	if len(cc.toSend) > 0 {
+		x := cc.toSend[0]
+		cc.toSend = cc.toSend[1:]
 		return x.imgs, x.meta, nil
 	}
 
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (fc *conditionalCamera) Stream(ctx context.Context, errHandlers ...gostream.ErrorHandler) (gostream.VideoStream, error) {
-	camStream, err := fc.cam.Stream(ctx, errHandlers...)
+func (cc *conditionalCamera) Stream(ctx context.Context, errHandlers ...gostream.ErrorHandler) (gostream.VideoStream, error) {
+	camStream, err := cc.cam.Stream(ctx, errHandlers...)
 	if err != nil {
 		return nil, err
 	}
 
-	return filterStream{camStream, fc}, nil
+	return conditionalStream{camStream, cc}, nil
 }
 
-type filterStream struct {
+type conditionalStream struct {
 	cameraStream gostream.VideoStream
-	fc           *conditionalCamera
+	cc           *conditionalCamera
 }
 
-func (fs filterStream) Next(ctx context.Context) (image.Image, func(), error) {
+func (cs conditionalStream) Next(ctx context.Context) (image.Image, func(), error) {
 	extra, ok := camera.FromContext(ctx)
 	if !ok || extra[data.FromDMString] != true {
 		// If not data management collector, return underlying stream contents without filtering.
-		return fs.cameraStream.Next(ctx)
+		return cs.cameraStream.Next(ctx)
 	}
 
-	img, release, err := fs.cameraStream.Next(ctx)
+	img, release, err := cs.cameraStream.Next(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	should, err := fs.fc.shouldSend(ctx, img)
+	should, err := cs.cc.shouldSend(ctx, img)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,87 +167,87 @@ func (fs filterStream) Next(ctx context.Context) (image.Image, func(), error) {
 		return img, release, nil
 	}
 
-	fs.fc.mu.Lock()
-	defer fs.fc.mu.Unlock()
+	cs.cc.mu.Lock()
+	defer cs.cc.mu.Unlock()
 
-	fs.fc.addToBuffer_inlock([]camera.NamedImage{{img, ""}}, resource.ResponseMetadata{CapturedAt: time.Now()})
+	cs.cc.addToBuffer_inlock([]camera.NamedImage{{img, ""}}, resource.ResponseMetadata{CapturedAt: time.Now()})
 
 	return nil, nil, data.ErrNoCaptureToStore
 }
 
-func (fc *conditionalCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
-	if fc.conf.WindowSeconds == 0 {
+func (cc *conditionalCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
+	if cc.conf.WindowSeconds == 0 {
 		return
 	}
 
-	fc.cleanBuffer_inlock()
-	fc.buffer = append(fc.buffer, cachedData{imgs, meta})
+	cc.cleanBuffer_inlock()
+	cc.buffer = append(cc.buffer, cachedData{imgs, meta})
 }
 
-func (fs filterStream) Close(ctx context.Context) error {
-	return fs.cameraStream.Close(ctx)
+func (cs conditionalStream) Close(ctx context.Context) error {
+	return cs.cameraStream.Close(ctx)
 }
 
-func (fc conditionalCamera) windowDuration() time.Duration {
-	return time.Second * time.Duration(fc.conf.WindowSeconds)
+func (cc conditionalCamera) windowDuration() time.Duration {
+	return time.Second * time.Duration(cc.conf.WindowSeconds)
 }
 
-func (fc *conditionalCamera) cleanBuffer_inlock() {
-	sort.Slice(fc.buffer, func(i, j int) bool {
-		a := fc.buffer[i]
-		b := fc.buffer[j]
+func (cc *conditionalCamera) cleanBuffer_inlock() {
+	sort.Slice(cc.buffer, func(i, j int) bool {
+		a := cc.buffer[i]
+		b := cc.buffer[j]
 		return a.meta.CapturedAt.Before(b.meta.CapturedAt)
 	})
 
-	early := time.Now().Add(-1 * fc.windowDuration())
-	for len(fc.buffer) > 0 {
-		if fc.buffer[0].meta.CapturedAt.After(early) {
+	early := time.Now().Add(-1 * cc.windowDuration())
+	for len(cc.buffer) > 0 {
+		if cc.buffer[0].meta.CapturedAt.After(early) {
 			return
 		}
-		fc.buffer = fc.buffer[1:]
+		cc.buffer = cc.buffer[1:]
 	}
 }
 
-func (fc *conditionalCamera) markShouldSend() {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
+func (cc *conditionalCamera) markShouldSend() {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
 
-	fc.captureTill = time.Now().Add(fc.windowDuration())
-	fc.cleanBuffer_inlock()
+	cc.captureTill = time.Now().Add(cc.windowDuration())
+	cc.cleanBuffer_inlock()
 
-	for _, x := range fc.buffer {
-		fc.toSend = append(fc.toSend, x)
+	for _, x := range cc.buffer {
+		cc.toSend = append(cc.toSend, x)
 	}
 
-	fc.buffer = []cachedData{}
+	cc.buffer = []cachedData{}
 }
 
-func (fc *conditionalCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
+func (cc *conditionalCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
 
-	ans, err := fc.filtSvc.DoCommand(ctx, nil)
+	ans, err := cc.filtSvc.DoCommand(ctx, nil)
 	if err != nil {
 		return false, err
 	}
 
 	// TODO: Make this configurable with "result" as default
 	if ans["result"].(bool) {
-		if time.Now().Before(fc.captureTill) {
+		if time.Now().Before(cc.captureTill) {
 			// send, but don't update captureTill
 			return true, nil
 		}
-		fc.markShouldSend()
+		cc.markShouldSend()
 		return true, nil
 	}
 
 	return false, nil
 }
 
-func (fc *conditionalCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
+func (cc *conditionalCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
 	return nil, fmt.Errorf("filteredCamera doesn't support pointclouds yes")
 }
 
-func (fc *conditionalCamera) Properties(ctx context.Context) (camera.Properties, error) {
-	p, err := fc.cam.Properties(ctx)
+func (cc *conditionalCamera) Properties(ctx context.Context) (camera.Properties, error) {
+	p, err := cc.cam.Properties(ctx)
 	if err == nil {
 		p.SupportsPCD = false
 	}
