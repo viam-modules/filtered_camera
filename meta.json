@@ -1,12 +1,16 @@
 {
     "module_id": "erh:filtered-camera",
     "visibility": "public",
-    "url": "https://github.com/erh/filtered_camera",
+    "url": "https://github.com/viam-modules/filtered_camera",
     "description": "a filtered camera",
     "models": [
         {
             "api": "rdk:component:camera",
             "model": "erh:camera:filtered-camera"
+        },
+        {
+            "api": "rdk:component:camera",
+            "model": "viam:camera:conditional-camera"
         }
     ],
     "build": {
