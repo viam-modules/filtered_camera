@@ -15,7 +15,6 @@ import (
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/generic"
 
-
 	"go.viam.com/rdk/gostream"
 	"go.viam.com/utils"
 )
@@ -23,11 +22,10 @@ import (
 var Model = resource.ModelNamespace("viam").WithFamily("camera").WithModel("conditional-camera")
 
 type Config struct {
-	Camera        string
-	FilterSvc     string
-	WindowSeconds int `json:"window_seconds"`
+	Camera        string `json:"camera"`
+	FilterSvc     string `json:"filter_svc"`
+	WindowSeconds int    `json:"window_seconds"`
 }
-
 
 func (cfg *Config) Validate(path string) ([]string, error) {
 	if cfg.Camera == "" {
@@ -107,8 +105,8 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 		return images, meta, nil
 	}
 
-	for _, img := range images {
-		shouldSend, err := cc.shouldSend(ctx, img.Image)
+	for range images {
+		shouldSend, err := cc.shouldSend(ctx)
 		if err != nil {
 			return nil, meta, err
 		}
@@ -158,7 +156,7 @@ func (cs conditionalStream) Next(ctx context.Context) (image.Image, func(), erro
 		return nil, nil, err
 	}
 
-	should, err := cs.cc.shouldSend(ctx, img)
+	should, err := cs.cc.shouldSend(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -222,7 +220,7 @@ func (cc *conditionalCamera) markShouldSend() {
 	cc.buffer = []cachedData{}
 }
 
-func (cc *conditionalCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
+func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
 
 	ans, err := cc.filtSvc.DoCommand(ctx, nil)
 	if err != nil {
