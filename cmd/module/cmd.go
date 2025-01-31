@@ -8,14 +8,17 @@ import (
 	"go.viam.com/rdk/module"
 
 	"github.com/erh/filtered_camera"
+	"github.com/erh/filtered_camera/conditional_camera"
 )
 
 func main() {
+
 	err := realMain()
 	if err != nil {
 		panic(err)
 	}
 }
+
 func realMain() error {
 
 	ctx := context.Background()
@@ -27,6 +30,11 @@ func realMain() error {
 	}
 
 	err = myMod.AddModelFromRegistry(ctx, camera.API, filtered_camera.Model)
+	if err != nil {
+		return err
+	}
+
+	err = myMod.AddModelFromRegistry(ctx, camera.API, conditional_camera.Model)
 	if err != nil {
 		return err
 	}
