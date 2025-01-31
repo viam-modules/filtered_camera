@@ -2,12 +2,13 @@ package conditional_camera
 
 import (
 	"context"
-	"fmt"
+
 	"image"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
@@ -19,11 +20,14 @@ import (
 	"go.viam.com/utils"
 )
 
-var Model = resource.ModelNamespace("viam").WithFamily("camera").WithModel("conditional-camera")
+var (
+	Model            = resource.ModelNamespace("viam").WithFamily("camera").WithModel("conditional-camera")
+	errUnimplemented = errors.New("unimplemented")
+)
 
 type Config struct {
 	Camera        string `json:"camera"`
-	FilterSvc     string `json:"filter_svc"`
+	FilterSvc     string `json:"filter_service"`
 	WindowSeconds int    `json:"window_seconds"`
 }
 
@@ -33,7 +37,7 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	}
 
 	if cfg.FilterSvc == "" {
-		return nil, utils.NewConfigValidationFieldRequiredError(path, "filter_svc")
+		return nil, utils.NewConfigValidationFieldRequiredError(path, "filter_service")
 	}
 
 	return []string{cfg.Camera, cfg.FilterSvc}, nil
@@ -241,7 +245,7 @@ func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
 }
 
 func (cc *conditionalCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
-	return nil, fmt.Errorf("filteredCamera doesn't support pointclouds yes")
+	return nil, errUnimplemented
 }
 
 func (cc *conditionalCamera) Properties(ctx context.Context) (camera.Properties, error) {
