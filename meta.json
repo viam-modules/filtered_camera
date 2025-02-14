@@ -6,7 +6,9 @@
     "models": [
         {
             "api": "rdk:component:camera",
-            "model": "erh:camera:filtered-camera"
+            "model": "erh:camera:filtered-camera",
+            "markdown_link": "README.md##configure-your-filtered-camera",
+            "short_description": "Filter captured data to selectively store only the data that meets certain criteria."
         },
         {
             "api": "rdk:component:camera",
