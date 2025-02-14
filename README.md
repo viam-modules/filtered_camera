@@ -12,13 +12,10 @@ This allows you to:
 
 This module also allows you to specifcy a time window for syncing the data captured in the N seconds before the capture criteria were met.
 
-## Configure your filtered camera
-
-> [!NOTE]  
-> Before configuring your camera, you must [create a machine](https://docs.viam.com/manage/fleet/robots/#add-a-new-machine).
-
 Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
 [Add `camera` / `filtered-camera` to your machine](https://docs.viam.com/configure/#components).
+
+## Configure your filtered camera
 
 On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box. 
 
