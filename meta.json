@@ -12,7 +12,9 @@
         },
         {
             "api": "rdk:component:camera",
-            "model": "viam:camera:conditional-camera"
+            "model": "viam:camera:conditional-camera",
+            "markdown_link": "README.md##configure-your-conditional-camera",
+            "short_description": "Filter image data by using a generic filter service as input."
         }
     ],
     "build": {
