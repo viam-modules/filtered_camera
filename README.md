@@ -12,10 +12,13 @@ This allows you to:
 
 This module also allows you to specifcy a time window for syncing the data captured in the N seconds before the capture criteria were met.
 
+## Configure your filtered camera
+
+> [!NOTE]  
+> Before configuring your camera, you must [create a machine](https://docs.viam.com/manage/fleet/robots/#add-a-new-machine).
+
 Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
 [Add `camera` / `filtered-camera` to your machine](https://docs.viam.com/configure/#components).
-
-## Configure your filtered camera
 
 On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box. 
 
@@ -75,11 +78,53 @@ go build
 ```
 
 On your robot’s page in the [Viam app](https://app.viam.com/), enter
-the [module’s executable
-path](/registry/create/#prepare-the-module-for-execution, then click
+the [module’s executable path](/registry/create/#prepare-the-module-for-execution, then click
 **Add module**.
 The name must use only lowercase characters.
 Then, click **Save** in the top right corner of the screen.
+
+# Viam conditional camera module
+
+If your smart machine captures a lot of data, you can conditionally capture data to selectively store only the data that meets certain criteria.
+
+The conditional camera module allows you to filter image data by using a generic filter service as input.  When the input filter service returns "result": True, an image is provided from the underlying camera. When "result": False, no image is produced.  
+
+This allows you to:
+- Develop a generic service that handles conditional logic from one or more component inputs and returns a boolean
+- Data capture when the conditions established by your generic filter service are met
+
+This module also allows you to specifcy a time window for syncing the data captured in the N seconds before the capture criteria were met.
+
+### Attributes
+
+The following attributes are available for `viam:camera:conditional-camera` bases:
+
+| Name | Type | Inclusion | Description |
+| ---- | ------ | ------------ | ----------- |
+| `camera` | string | **Required** | The name of the camera to filter images for. |
+| `filter_service` | string | **Required** | The generic filter service used to determine whether to filter the image. |
+| `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the N number of seconds preceding the condition being met. |
+
+On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box. 
+
+```json
+{
+    "camera": "<your_camera_name>",
+    "filter_service": "<your_vision_service_name>",
+    "window_seconds": <time_window_for_capture>
+}
+```
+
+### Example configurations:
+
+```json
+{
+    "camera": "my_camera",
+    "filter_service": "is_too_hot",
+    "windowSeconds": 3
+}
+```
+
 
 ## Next Steps
 
