@@ -7,18 +7,18 @@ This module allows you to filter image data by:
 - Detected objects and their associated required confidence scores
 
 This allows you to:
+
 - Classify images and only sync images that have the required label
 - Look for objects in an image and sync the images that have a certain object
 
-This module also allows you to specifcy a time window for syncing the data captured in the N seconds before the capture criteria were met.
+This module also allows you to specify a time window for syncing the data captured in the N seconds before the capture criteria were met.
 
-
-Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
+To add the filtered camera to your machine, navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
 [Add `camera` / `filtered-camera` to your machine](https://docs.viam.com/configure/#components).
 
 ## Configure your filtered camera
 
-On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box. 
+On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box.
 
 ```json
 {
@@ -38,7 +38,7 @@ On the new component panel, copy and paste the following attribute template into
 
 Remove the "classifications" or "objects" section depending on if your ML model is a classifier or detector.
 
-> [!NOTE]  
+> [!NOTE]
 > For more information, see [Configure a Machine](https://docs.viam.com/configure/).
 
 ### Attributes
@@ -53,7 +53,7 @@ The following attributes are available for `erh:camera:filtered-camera` bases:
 | `classifications` | float64 | Optional | A map of classification labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a classifier. You can find these labels by testing your vision service. |
 | `objects` | float64 | Optional | A map of object detection labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a detector. You can find these labels by testing your vision service. |
 
-### Example configurations:
+### Example configurations
 
 ```json
 {
@@ -85,13 +85,16 @@ Then, click **Save** in the top right corner of the screen.
 
 If your smart machine captures a lot of data, you can conditionally capture data to selectively store only the data that meets certain criteria.
 
-The conditional camera module allows you to filter image data by using a generic filter service as input.  When the input filter service returns "result": True, an image is provided from the underlying camera. When "result": False, no image is produced.  
+The conditional camera module allows you to filter image data by using a generic filter service as input.  When the input filter service returns "result": True, an image is provided from the underlying camera. When "result": False, no image is produced.
 
 This allows you to:
+
 - Develop a generic service that handles conditional logic from one or more component inputs and returns a boolean
 - Data capture when the conditions established by your generic filter service are met
 
-This module also allows you to specifcy a time window for syncing the data captured in the N seconds before the capture criteria were met.
+This module also allows you to specify a time window for syncing the data captured in the N seconds before the capture criteria were met.
+
+## Configure your conditional camera
 
 ### Attributes
 
@@ -103,7 +106,7 @@ The following attributes are available for `viam:camera:conditional-camera` base
 | `filter_service` | string | **Required** | The generic filter service used to determine whether to filter the image. |
 | `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the N number of seconds preceding the condition being met. |
 
-On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box. 
+On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box.
 
 ```json
 {
@@ -113,7 +116,7 @@ On the new component panel, copy and paste the following attribute template into
 }
 ```
 
-### Example configurations:
+### Example configurations
 
 ```json
 {
@@ -123,12 +126,12 @@ On the new component panel, copy and paste the following attribute template into
 }
 ```
 
-
 ## Next Steps
 
 - To test your camera, go to the [**CONTROL** tab](https://docs.viam.com/manage/fleet/robots/#control).
 - To test that your camera's images are filtering correctly after [configuring data capture](https://docs.viam.com/services/data/capture/), [go to the **DATA** tab](https://docs.viam.com/data/view/).
 
 ## License
+
 Copyright 2021-2023 Viam Inc. <br>
 Apache 2.0
