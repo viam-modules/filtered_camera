@@ -43,7 +43,7 @@ Remove the "classifications" or "objects" section depending on if your ML model 
 
 ### Attributes
 
-The following attributes are available for `erh:camera:filtered-camera` bases:
+The following attributes are available for `viam:camera:filtered-camera` bases:
 
 | Name | Type | Inclusion | Description |
 | ---- | ------ | ------------ | ----------- |

@@ -1,4 +1,4 @@
-module github.com/erh/filtered_camera
+module github.com/viam-modules/filtered_camera
 
 go 1.23
 

@@ -20,7 +20,7 @@ import (
 	"go.viam.com/utils"
 )
 
-var Model = resource.ModelNamespace("erh").WithFamily("camera").WithModel("filtered-camera")
+var Model = resource.ModelNamespace("viam").WithFamily("camera").WithModel("filtered-camera")
 
 type Config struct {
 	Camera        string
