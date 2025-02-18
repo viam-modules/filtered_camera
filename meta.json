@@ -1,12 +1,12 @@
 {
-    "module_id": "erh:filtered-camera",
+    "module_id": "viam:filtered-camera",
     "visibility": "public",
     "url": "https://github.com/viam-modules/filtered_camera",
     "description": "a filtered camera",
     "models": [
         {
             "api": "rdk:component:camera",
-            "model": "erh:camera:filtered-camera",
+            "model": "viam:camera:filtered-camera",
             "markdown_link": "README.md##configure-your-filtered-camera",
             "short_description": "Filter captured data to selectively store only the data that meets certain criteria."
         },

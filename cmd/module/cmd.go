@@ -7,8 +7,8 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/module"
 
-	"github.com/erh/filtered_camera"
-	"github.com/erh/filtered_camera/conditional_camera"
+	"github.com/viam-modules/filtered_camera"
+	"github.com/viam-modules/filtered_camera/conditional_camera"
 )
 
 func main() {
