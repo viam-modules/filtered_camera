@@ -14,7 +14,7 @@ This allows you to:
 This module also allows you to specify a time window for syncing the data captured in the N seconds before the capture criteria were met.
 
 To add the filtered camera to your machine, navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
-[Add `camera` / `filtered-camera` to your machine](https://docs.viam.com/configure/#components).
+Add `camera` / `filtered-camera` to your machine.
 
 ## Configure your filtered camera
 
@@ -39,7 +39,7 @@ On the new component panel, copy and paste the following attribute template into
 Remove the "classifications" or "objects" section depending on if your ML model is a classifier or detector.
 
 > [!NOTE]
-> For more information, see [Configure a Machine](https://docs.viam.com/configure/).
+> For more information, see [Configure a Machine](https://docs.viam.com/operate/get-started/supported-hardware/#configure-hardware-on-your-machine).
 
 ### Attributes
 
