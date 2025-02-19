@@ -7,13 +7,13 @@
         {
             "api": "rdk:component:camera",
             "model": "viam:camera:filtered-camera",
-            "markdown_link": "README.md##configure-your-filtered-camera",
+            "markdown_link": "README.md#configure-your-filtered-camera",
             "short_description": "Filter captured data to selectively store only the data that meets certain criteria."
         },
         {
             "api": "rdk:component:camera",
             "model": "viam:camera:conditional-camera",
-            "markdown_link": "README.md##configure-your-conditional-camera",
+            "markdown_link": "README.md#configure-your-conditional-camera",
             "short_description": "Filter image data by using a generic filter service as input."
         }
     ],
