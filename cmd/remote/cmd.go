@@ -33,7 +33,7 @@ func realMain() error {
 		return err
 	}
 
-	myRobot, err := robotimpl.New(ctx, conf, logger)
+	myRobot, err := robotimpl.New(ctx, conf, nil, logger)
 	if err != nil {
 		return err
 	}

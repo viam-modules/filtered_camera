@@ -3,7 +3,6 @@ package conditional_camera
 import (
 	"context"
 
-	"image"
 	"sort"
 	"sync"
 	"time"
@@ -14,9 +13,9 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
+	"go.viam.com/rdk/rimage"
 	"go.viam.com/rdk/services/generic"
 
-	"go.viam.com/rdk/gostream"
 	"go.viam.com/utils"
 )
 
@@ -51,19 +50,19 @@ func init() {
 				return nil, err
 			}
 
-			fc := &conditionalCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
+			cc := &conditionalCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
 
-			fc.cam, err = camera.FromDependencies(deps, newConf.Camera)
+			cc.cam, err = camera.FromDependencies(deps, newConf.Camera)
 			if err != nil {
 				return nil, err
 			}
 
-			fc.filtSvc, err = resource.FromDependencies[resource.Resource](deps, generic.Named(newConf.FilterSvc))
+			cc.filtSvc, err = resource.FromDependencies[resource.Resource](deps, generic.Named(newConf.FilterSvc))
 			if err != nil {
 				return nil, err
 			}
 
-			return fc, nil
+			return cc, nil
 		},
 	})
 }
@@ -104,7 +103,7 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 		return images, meta, err
 	}
 
-	extra, ok := camera.FromContext(ctx)
+	extra, ok := ctx.Value(0).(map[string]interface{})
 	if !ok || extra[data.FromDMString] != true {
 		return images, meta, nil
 	}
@@ -134,47 +133,36 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (cc *conditionalCamera) Stream(ctx context.Context, errHandlers ...gostream.ErrorHandler) (gostream.VideoStream, error) {
-	camStream, err := cc.cam.Stream(ctx, errHandlers...)
-	if err != nil {
-		return nil, err
-	}
-
-	return conditionalStream{camStream, cc}, nil
-}
-
-type conditionalStream struct {
-	cameraStream gostream.VideoStream
-	cc           *conditionalCamera
-}
-
-func (cs conditionalStream) Next(ctx context.Context) (image.Image, func(), error) {
-	extra, ok := camera.FromContext(ctx)
+func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
+	extra, ok := ctx.Value(0).(map[string]interface{})
 	if !ok || extra[data.FromDMString] != true {
-		// If not data management collector, return underlying stream contents without filtering.
-		return cs.cameraStream.Next(ctx)
+		return cc.cam.Image(ctx, mimeType, extra)
 	}
 
-	img, release, err := cs.cameraStream.Next(ctx)
+	bytes, meta, err := cc.cam.Image(ctx, mimeType, extra)
 	if err != nil {
-		return nil, nil, err
+		return nil, meta, err
 	}
-
-	should, err := cs.cc.shouldSend(ctx)
+	img, err := rimage.DecodeImage(ctx, bytes, mimeType)
 	if err != nil {
-		return nil, nil, err
+		return bytes, meta, err
 	}
 
-	if should {
-		return img, release, nil
+	shouldSend, err := cc.shouldSend(ctx)
+	if err != nil {
+		return bytes, meta, err
+	}
+	if shouldSend {
+		return bytes, meta, nil
 	}
 
-	cs.cc.mu.Lock()
-	defer cs.cc.mu.Unlock()
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
 
-	cs.cc.addToBuffer_inlock([]camera.NamedImage{{img, ""}}, resource.ResponseMetadata{CapturedAt: time.Now()})
+	cc.addToBuffer_inlock([]camera.NamedImage{{Image: img, SourceName: ""}}, resource.ResponseMetadata{CapturedAt: time.Now()})
 
-	return nil, nil, data.ErrNoCaptureToStore
+	return nil, meta, data.ErrNoCaptureToStore
+
 }
 
 func (cc *conditionalCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
@@ -186,8 +174,8 @@ func (cc *conditionalCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta r
 	cc.buffer = append(cc.buffer, cachedData{imgs, meta})
 }
 
-func (cs conditionalStream) Close(ctx context.Context) error {
-	return cs.cameraStream.Close(ctx)
+func (cc *conditionalCamera) Close(ctx context.Context) error {
+	return cc.cam.Close(ctx)
 }
 
 func (cc conditionalCamera) windowDuration() time.Duration {
