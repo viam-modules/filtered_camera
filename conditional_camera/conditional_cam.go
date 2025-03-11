@@ -105,7 +105,7 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 
 	extra, ok := ctx.Value(0).(map[string]interface{})
 	if !ok || extra[data.FromDMString] != true {
-		return images, meta, nil
+		return images, meta, err
 	}
 
 	for range images {
@@ -134,15 +134,16 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 }
 
 func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	extra, ok := ctx.Value(0).(map[string]interface{})
-	if !ok || extra[data.FromDMString] != true {
-		return cc.cam.Image(ctx, mimeType, extra)
-	}
 
 	bytes, meta, err := cc.cam.Image(ctx, mimeType, extra)
 	if err != nil {
 		return nil, meta, err
 	}
+	ex, ok := ctx.Value(0).(map[string]interface{})
+	if !ok || ex[data.FromDMString] != true {
+		return bytes, meta, err
+	}
+
 	img, err := rimage.DecodeImage(ctx, bytes, mimeType)
 	if err != nil {
 		return bytes, meta, err
@@ -205,10 +206,7 @@ func (cc *conditionalCamera) markShouldSend() {
 	cc.captureTill = time.Now().Add(cc.windowDuration())
 	cc.cleanBuffer_inlock()
 
-	for _, x := range cc.buffer {
-		cc.toSend = append(cc.toSend, x)
-	}
-
+	cc.toSend = append(cc.toSend, cc.buffer...)
 	cc.buffer = []cachedData{}
 }
 

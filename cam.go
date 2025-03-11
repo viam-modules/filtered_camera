@@ -152,9 +152,9 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 	}
 
 	extra, ok := ctx.Value(0).(map[string]interface{})
-	// extra, ok := camera.FromContext(ctx)
 	if !ok || extra[data.FromDMString] != true {
-		return images, meta, nil
+		// If not data management collector, return underlying contents without filtering.
+		return images, meta, err
 	}
 
 	for _, img := range images {
@@ -183,15 +183,17 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 }
 
 func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	extra, ok := ctx.Value(0).(map[string]interface{})
-	if !ok || extra[data.FromDMString] != true {
-		return fc.cam.Image(ctx, mimeType, extra)	
-	}
 
 	bytes, meta, err := fc.cam.Image(ctx, mimeType, extra)
 	if err != nil {
 		return nil, meta, err
 	}
+	ex, ok := ctx.Value(0).(map[string]interface{})
+	if !ok || ex[data.FromDMString] != true {
+		// If not data management collector, return underlying contents without filtering.
+		return bytes, meta, err
+	}
+
 	img, err := rimage.DecodeImage(ctx, bytes, mimeType)
 	if err != nil {
 		return bytes, meta, err
@@ -253,10 +255,7 @@ func (fc *filteredCamera) markShouldSend() {
 	fc.captureTill = time.Now().Add(fc.windowDuration())
 	fc.cleanBuffer_inlock()
 
-	for _, x := range fc.buffer {
-		fc.toSend = append(fc.toSend, x)
-	}
-
+	fc.toSend = append(fc.toSend, fc.buffer...)
 	fc.buffer = []cachedData{}
 }
 
