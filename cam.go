@@ -150,11 +150,11 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 	if err != nil {
 		return images, meta, err
 	}
-
-	extra, ok := ctx.Value(0).(map[string]interface{})
+	// Search for a known key-value pair in the context.
+	extra, ok := ctx.Value(int(0)).(map[string]interface{})
 	if !ok || extra[data.FromDMString] != true {
 		// If not data management collector, return underlying contents without filtering.
-		return images, meta, err
+		return images, meta, nil
 	}
 
 	for _, img := range images {
@@ -188,13 +188,14 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 	if err != nil {
 		return nil, meta, err
 	}
+	// Search for a known key-value pair in the context.
 	ex, ok := ctx.Value(0).(map[string]interface{})
 	if !ok || ex[data.FromDMString] != true {
 		// If not data management collector, return underlying contents without filtering.
-		return bytes, meta, err
+		return bytes, meta, nil
 	}
 
-	img, err := rimage.DecodeImage(ctx, bytes, mimeType)
+	img, err := rimage.DecodeImage(ctx, bytes, meta.MimeType)
 	if err != nil {
 		return bytes, meta, err
 	}

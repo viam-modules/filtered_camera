@@ -103,9 +103,10 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 		return images, meta, err
 	}
 
+	// Search for a known key-value pair in the context.
 	extra, ok := ctx.Value(0).(map[string]interface{})
 	if !ok || extra[data.FromDMString] != true {
-		return images, meta, err
+		return images, meta, nil
 	}
 
 	for range images {
@@ -141,10 +142,10 @@ func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra m
 	}
 	ex, ok := ctx.Value(0).(map[string]interface{})
 	if !ok || ex[data.FromDMString] != true {
-		return bytes, meta, err
+		return bytes, meta, nil
 	}
 
-	img, err := rimage.DecodeImage(ctx, bytes, mimeType)
+	img, err := rimage.DecodeImage(ctx, bytes, meta.MimeType)
 	if err != nil {
 		return bytes, meta, err
 	}
