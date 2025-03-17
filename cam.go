@@ -189,7 +189,7 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 		return nil, meta, err
 	}
 	// Search for a known key-value pair in the context.
-	ex, ok := ctx.Value(0).(map[string]interface{})
+	ex, ok := ctx.Value(int(0)).(map[string]interface{})
 	if !ok || ex[data.FromDMString] != true {
 		// If not data management collector, return underlying contents without filtering.
 		return bytes, meta, nil

@@ -104,7 +104,7 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 	}
 
 	// Search for a known key-value pair in the context.
-	extra, ok := ctx.Value(0).(map[string]interface{})
+	extra, ok := ctx.Value(int(0)).(map[string]interface{})
 	if !ok || extra[data.FromDMString] != true {
 		return images, meta, nil
 	}
@@ -140,7 +140,7 @@ func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra m
 	if err != nil {
 		return nil, meta, err
 	}
-	ex, ok := ctx.Value(0).(map[string]interface{})
+	ex, ok := ctx.Value(int(0)).(map[string]interface{})
 	if !ok || ex[data.FromDMString] != true {
 		return bytes, meta, nil
 	}
