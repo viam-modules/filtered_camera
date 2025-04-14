@@ -131,11 +131,6 @@ type filteredCamera struct {
 	vis vision.Service
 
 	buf imagebuffer.ImageBuffer
-
-	//mu          sync.Mutex
-	//buffer      []cachedData
-	//toSend      []cachedData
-	//captureTill time.Time
 }
 
 func (fc *filteredCamera) Name() resource.Name {

@@ -83,11 +83,6 @@ type conditionalCamera struct {
 	filtSvc resource.Resource
 
 	buf imagebuffer.ImageBuffer
-
-	//mu          sync.Mutex
-	//buffer      []cachedData
-	//toSend      []cachedData
-	//captureTill time.Time
 }
 
 func (cc *conditionalCamera) Name() resource.Name {
@@ -166,7 +161,6 @@ func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra m
 func (cc *conditionalCamera) Close(ctx context.Context) error {
 	return cc.cam.Close(ctx)
 }
-
 
 func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
 
