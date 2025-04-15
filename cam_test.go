@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
@@ -124,31 +125,31 @@ func TestWindow(t *testing.T) {
 	b := time.Now().Add(-1 * time.Second)
 	c := time.Now().Add(-1 * time.Minute)
 
-	fc.buffer = []cachedData{
-		{meta: resource.ResponseMetadata{CapturedAt: a}},
-		{meta: resource.ResponseMetadata{CapturedAt: b}},
-		{meta: resource.ResponseMetadata{CapturedAt: c}},
+	fc.buf.Buffer = []imagebuffer.CachedData{
+		{Meta: resource.ResponseMetadata{CapturedAt: a}},
+		{Meta: resource.ResponseMetadata{CapturedAt: b}},
+		{Meta: resource.ResponseMetadata{CapturedAt: c}},
 	}
 
-	fc.markShouldSend()
+	fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 
-	test.That(t, len(fc.buffer), test.ShouldEqual, 0)
-	test.That(t, len(fc.toSend), test.ShouldEqual, 2)
-	test.That(t, b, test.ShouldEqual, fc.toSend[0].meta.CapturedAt)
-	test.That(t, a, test.ShouldEqual, fc.toSend[1].meta.CapturedAt)
+	test.That(t, len(fc.buf.Buffer), test.ShouldEqual, 0)
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 2)
+	test.That(t, b, test.ShouldEqual, fc.buf.ToSend[0].Meta.CapturedAt)
+	test.That(t, a, test.ShouldEqual, fc.buf.ToSend[1].Meta.CapturedAt)
 
-	fc.buffer = []cachedData{
-		{meta: resource.ResponseMetadata{CapturedAt: c}},
-		{meta: resource.ResponseMetadata{CapturedAt: b}},
-		{meta: resource.ResponseMetadata{CapturedAt: a}},
+	fc.buf.Buffer = []imagebuffer.CachedData{
+		{Meta: resource.ResponseMetadata{CapturedAt: c}},
+		{Meta: resource.ResponseMetadata{CapturedAt: b}},
+		{Meta: resource.ResponseMetadata{CapturedAt: a}},
 	}
-	fc.toSend = []cachedData{}
+	fc.buf.ToSend = []imagebuffer.CachedData{}
 
-	fc.markShouldSend()
+	fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 
-	test.That(t, len(fc.buffer), test.ShouldEqual, 0)
-	test.That(t, len(fc.toSend), test.ShouldEqual, 2)
-	test.That(t, b, test.ShouldEqual, fc.toSend[0].meta.CapturedAt)
-	test.That(t, a, test.ShouldEqual, fc.toSend[1].meta.CapturedAt)
+	test.That(t, len(fc.buf.Buffer), test.ShouldEqual, 0)
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 2)
+	test.That(t, b, test.ShouldEqual, fc.buf.ToSend[0].Meta.CapturedAt)
+	test.That(t, a, test.ShouldEqual, fc.buf.ToSend[1].Meta.CapturedAt)
 
 }
