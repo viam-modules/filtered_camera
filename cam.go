@@ -10,7 +10,6 @@ import (
 
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
-	"go.viam.com/rdk/gostream"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
@@ -20,7 +19,7 @@ import (
 	"go.viam.com/utils"
 )
 
-var Model = resource.ModelNamespace("viam").WithFamily("camera").WithModel("filtered-camera")
+var Model = Family.WithModel("filtered-camera")
 
 type Config struct {
 	Camera        string
@@ -145,14 +144,27 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 	return nil, resource.ErrDoUnimplemented
 }
 
+func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
+	ni, _, err := fc.images(ctx, extra)
+	if err != nil {
+		return nil, camera.ImageMetadata{}, err
+	}
+
+	return ImagesToImage(ctx, ni, mimeType)
+}
+
 func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	return fc.images(ctx, nil)
+}
+
+func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+
 	images, meta, err := fc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
 	}
 
-	extra, ok := camera.FromContext(ctx)
-	if !ok || extra[data.FromDMString] != true {
+	if !IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
 
@@ -181,49 +193,6 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (fc *filteredCamera) Stream(ctx context.Context, errHandlers ...gostream.ErrorHandler) (gostream.VideoStream, error) {
-	camStream, err := fc.cam.Stream(ctx, errHandlers...)
-	if err != nil {
-		return nil, err
-	}
-
-	return filterStream{camStream, fc}, nil
-}
-
-type filterStream struct {
-	cameraStream gostream.VideoStream
-	fc           *filteredCamera
-}
-
-func (fs filterStream) Next(ctx context.Context) (image.Image, func(), error) {
-	extra, ok := camera.FromContext(ctx)
-	if !ok || extra[data.FromDMString] != true {
-		// If not data management collector, return underlying stream contents without filtering.
-		return fs.cameraStream.Next(ctx)
-	}
-
-	img, release, err := fs.cameraStream.Next(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	should, err := fs.fc.shouldSend(ctx, img)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if should {
-		return img, release, nil
-	}
-
-	fs.fc.mu.Lock()
-	defer fs.fc.mu.Unlock()
-
-	fs.fc.addToBuffer_inlock([]camera.NamedImage{{img, ""}}, resource.ResponseMetadata{CapturedAt: time.Now()})
-
-	return nil, nil, data.ErrNoCaptureToStore
-}
-
 func (fc *filteredCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
 	if fc.conf.WindowSeconds == 0 {
 		return
@@ -231,10 +200,6 @@ func (fc *filteredCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta reso
 
 	fc.cleanBuffer_inlock()
 	fc.buffer = append(fc.buffer, cachedData{imgs, meta})
-}
-
-func (fs filterStream) Close(ctx context.Context) error {
-	return fs.cameraStream.Close(ctx)
 }
 
 func (fc filteredCamera) windowDuration() time.Duration {

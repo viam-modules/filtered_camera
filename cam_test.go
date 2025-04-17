@@ -41,14 +41,15 @@ func getDummyVisionService() vision.Service {
 	}
 
 	svc.DetectionsFunc = func(ctx context.Context, img image.Image, extra map[string]interface{}) ([]objectdetection.Detection, error) {
+		r := image.Rect(1, 1, 1, 1)
 		if img == c {
-			return []objectdetection.Detection{objectdetection.NewDetection(image.Rect(1, 1, 1, 1), .1, "b")}, nil
+			return []objectdetection.Detection{objectdetection.NewDetection(r, r, .1, "b")}, nil
 		}
 		if img == b {
-			return []objectdetection.Detection{objectdetection.NewDetection(image.Rect(1, 1, 1, 1), .9, "b")}, nil
+			return []objectdetection.Detection{objectdetection.NewDetection(r, r, .9, "b")}, nil
 		}
 		if img == f {
-			return []objectdetection.Detection{objectdetection.NewDetection(image.Rect(1, 1, 1, 1), .9, "f")}, nil
+			return []objectdetection.Detection{objectdetection.NewDetection(r, r, .9, "f")}, nil
 		}
 		return []objectdetection.Detection{}, nil
 	}

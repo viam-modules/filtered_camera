@@ -2,8 +2,6 @@ package conditional_camera
 
 import (
 	"context"
-
-	"image"
 	"sort"
 	"sync"
 	"time"
@@ -16,12 +14,13 @@ import (
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/generic"
 
-	"go.viam.com/rdk/gostream"
 	"go.viam.com/utils"
+
+	"github.com/viam-modules/filtered_camera"
 )
 
 var (
-	Model            = resource.ModelNamespace("viam").WithFamily("camera").WithModel("conditional-camera")
+	Model            = filtered_camera.Family.WithModel("conditional-camera")
 	errUnimplemented = errors.New("unimplemented")
 )
 
@@ -98,14 +97,27 @@ func (cc *conditionalCamera) DoCommand(ctx context.Context, cmd map[string]inter
 	return nil, resource.ErrDoUnimplemented
 }
 
+func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
+	ni, _, err := cc.images(ctx, extra)
+	if err != nil {
+		return nil, camera.ImageMetadata{}, err
+	}
+
+	return filtered_camera.ImagesToImage(ctx, ni, mimeType)
+}
+
 func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	return cc.images(ctx, nil)
+}
+
+func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+
 	images, meta, err := cc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
 	}
 
-	extra, ok := camera.FromContext(ctx)
-	if !ok || extra[data.FromDMString] != true {
+	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
 
@@ -134,49 +146,6 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (cc *conditionalCamera) Stream(ctx context.Context, errHandlers ...gostream.ErrorHandler) (gostream.VideoStream, error) {
-	camStream, err := cc.cam.Stream(ctx, errHandlers...)
-	if err != nil {
-		return nil, err
-	}
-
-	return conditionalStream{camStream, cc}, nil
-}
-
-type conditionalStream struct {
-	cameraStream gostream.VideoStream
-	cc           *conditionalCamera
-}
-
-func (cs conditionalStream) Next(ctx context.Context) (image.Image, func(), error) {
-	extra, ok := camera.FromContext(ctx)
-	if !ok || extra[data.FromDMString] != true {
-		// If not data management collector, return underlying stream contents without filtering.
-		return cs.cameraStream.Next(ctx)
-	}
-
-	img, release, err := cs.cameraStream.Next(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	should, err := cs.cc.shouldSend(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if should {
-		return img, release, nil
-	}
-
-	cs.cc.mu.Lock()
-	defer cs.cc.mu.Unlock()
-
-	cs.cc.addToBuffer_inlock([]camera.NamedImage{{img, ""}}, resource.ResponseMetadata{CapturedAt: time.Now()})
-
-	return nil, nil, data.ErrNoCaptureToStore
-}
-
 func (cc *conditionalCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
 	if cc.conf.WindowSeconds == 0 {
 		return
@@ -184,10 +153,6 @@ func (cc *conditionalCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta r
 
 	cc.cleanBuffer_inlock()
 	cc.buffer = append(cc.buffer, cachedData{imgs, meta})
-}
-
-func (cs conditionalStream) Close(ctx context.Context) error {
-	return cs.cameraStream.Close(ctx)
 }
 
 func (cc conditionalCamera) windowDuration() time.Duration {

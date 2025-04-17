@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"go.viam.com/rdk/components/camera"
-	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/module"
 
 	"github.com/viam-modules/filtered_camera"
@@ -22,9 +21,8 @@ func main() {
 func realMain() error {
 
 	ctx := context.Background()
-	logger := logging.NewDebugLogger("client")
 
-	myMod, err := module.NewModuleFromArgs(ctx, logger)
+	myMod, err := module.NewModuleFromArgs(ctx)
 	if err != nil {
 		return err
 	}
