@@ -67,11 +67,6 @@ func init() {
 	})
 }
 
-type cachedData struct {
-	imgs []camera.NamedImage
-	meta resource.ResponseMetadata
-}
-
 type conditionalCamera struct {
 	resource.AlwaysRebuild
 	resource.TriviallyCloseable
