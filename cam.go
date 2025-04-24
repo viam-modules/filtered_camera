@@ -183,39 +183,6 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	image, meta, err := fc.cam.Image(ctx, mimeType, extra)
-	if err != nil {
-		return image, meta, err
-	}
-
-	// If not data management collector, return underlying stream contents without filtering.
-	if ctx.Value(data.FromDMContextKey{}) == true {
-		return image, meta, nil
-	}
-
-	realImage, err := rimage.DecodeImage(ctx, image, mimeType)
-	if err != nil {
-		return image, meta, err
-	}
-
-	should, err := fc.shouldSend(ctx, realImage)
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-
-	if should {
-		return image, meta, nil
-	}
-
-	fc.buf.Mu.Lock()
-	defer fc.buf.Mu.Unlock()
-
-	fc.buf.AddToBuffer_inlock([]camera.NamedImage{{realImage, ""}}, resource.ResponseMetadata{CapturedAt: time.Now()}, fc.conf.WindowSeconds)
-
-	return nil, camera.ImageMetadata{}, data.ErrNoCaptureToStore
-}
-
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
 
 	if len(fc.conf.Classifications) > 0 {

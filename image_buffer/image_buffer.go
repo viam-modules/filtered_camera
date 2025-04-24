@@ -22,7 +22,7 @@ type ImageBuffer struct {
 }
 
 func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
-return time.Second * time.Duration(windowSeconds)
+	return time.Second * time.Duration(windowSeconds)
 }
 
 func (ib *ImageBuffer) AddToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata, windowSeconds int) {

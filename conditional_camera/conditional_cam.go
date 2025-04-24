@@ -5,8 +5,8 @@ import (
 
 	"time"
 
-	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"github.com/pkg/errors"
+	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
@@ -140,39 +140,6 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	}
 
 	return nil, meta, data.ErrNoCaptureToStore
-}
-
-func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	image, meta, err := cc.cam.Image(ctx, mimeType, extra)
-	if err != nil {
-		return image, meta, err
-	}
-
-	// If not data management collector, return underlying stream contents without filtering.
-	if ctx.Value(data.FromDMContextKey{}) == true {
-		return image, meta, nil
-	}
-
-	shouldSend, err := cc.shouldSend(ctx)
-	if err != nil {
-		return nil, meta, err
-	}
-
-	if shouldSend {
-		return image, meta, nil
-	}
-
-	cc.buf.Mu.Lock()
-	defer cc.buf.Mu.Unlock()
-
-	realImage, err := rimage.DecodeImage(ctx, image, mimeType)
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-
-	cc.buf.AddToBuffer_inlock([]camera.NamedImage{{realImage, ""}}, resource.ResponseMetadata{CapturedAt: time.Now()}, cc.conf.WindowSeconds)
-
-	return nil, camera.ImageMetadata{}, data.ErrNoCaptureToStore
 }
 
 func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
