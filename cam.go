@@ -192,7 +192,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 		}
 
 		if fc.conf.keepClassifications(res) {
-			fc.logger.Infof("keeping image with classifications %v", res)
+			fc.logger.Debugf("keeping image with classifications %v", res)
 			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 			return true, nil
 		}
@@ -205,7 +205,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 		}
 
 		if fc.conf.keepObjects(res) {
-			fc.logger.Infof("keeping image with objects %v", res)
+			fc.logger.Debugf("keeping image with objects %v", res)
 			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 			return true, nil
 		}
