@@ -18,7 +18,7 @@
         }
     ],
     "build": {
-        "build": "make module",
+        "build": "make module.tar.gz",
         "arch" : ["linux/amd64", "linux/arm64", "darwin/arm64", "windows/amd64"]
     },
     "entrypoint": "filtered-camera"
