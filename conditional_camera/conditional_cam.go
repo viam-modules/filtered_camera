@@ -2,11 +2,11 @@ package conditional_camera
 
 import (
 	"context"
-	"sort"
-	"sync"
+
 	"time"
 
 	"github.com/pkg/errors"
+	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
@@ -67,11 +67,6 @@ func init() {
 	})
 }
 
-type cachedData struct {
-	imgs []camera.NamedImage
-	meta resource.ResponseMetadata
-}
-
 type conditionalCamera struct {
 	resource.AlwaysRebuild
 	resource.TriviallyCloseable
@@ -82,11 +77,7 @@ type conditionalCamera struct {
 
 	cam     camera.Camera
 	filtSvc resource.Resource
-
-	mu          sync.Mutex
-	buffer      []cachedData
-	toSend      []cachedData
-	captureTill time.Time
+	buf     imagebuffer.ImageBuffer
 }
 
 func (cc *conditionalCamera) Name() resource.Name {
@@ -132,61 +123,18 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		}
 	}
 
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
+	cc.buf.Mu.Lock()
+	defer cc.buf.Mu.Unlock()
 
-	cc.addToBuffer_inlock(images, meta)
+	cc.buf.AddToBuffer_inlock(images, meta, cc.conf.WindowSeconds)
 
-	if len(cc.toSend) > 0 {
-		x := cc.toSend[0]
-		cc.toSend = cc.toSend[1:]
-		return x.imgs, x.meta, nil
+	if len(cc.buf.ToSend) > 0 {
+		x := cc.buf.ToSend[0]
+		cc.buf.ToSend = cc.buf.ToSend[1:]
+		return x.Imgs, x.Meta, nil
 	}
 
 	return nil, meta, data.ErrNoCaptureToStore
-}
-
-func (cc *conditionalCamera) addToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
-	if cc.conf.WindowSeconds == 0 {
-		return
-	}
-
-	cc.cleanBuffer_inlock()
-	cc.buffer = append(cc.buffer, cachedData{imgs, meta})
-}
-
-func (cc conditionalCamera) windowDuration() time.Duration {
-	return time.Second * time.Duration(cc.conf.WindowSeconds)
-}
-
-func (cc *conditionalCamera) cleanBuffer_inlock() {
-	sort.Slice(cc.buffer, func(i, j int) bool {
-		a := cc.buffer[i]
-		b := cc.buffer[j]
-		return a.meta.CapturedAt.Before(b.meta.CapturedAt)
-	})
-
-	early := time.Now().Add(-1 * cc.windowDuration())
-	for len(cc.buffer) > 0 {
-		if cc.buffer[0].meta.CapturedAt.After(early) {
-			return
-		}
-		cc.buffer = cc.buffer[1:]
-	}
-}
-
-func (cc *conditionalCamera) markShouldSend() {
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
-
-	cc.captureTill = time.Now().Add(cc.windowDuration())
-	cc.cleanBuffer_inlock()
-
-	for _, x := range cc.buffer {
-		cc.toSend = append(cc.toSend, x)
-	}
-
-	cc.buffer = []cachedData{}
 }
 
 func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
@@ -198,11 +146,11 @@ func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
 
 	// TODO: Make this configurable with "result" as default
 	if ans["result"].(bool) {
-		if time.Now().Before(cc.captureTill) {
+		if time.Now().Before(cc.buf.CaptureTill) {
 			// send, but don't update captureTill
 			return true, nil
 		}
-		cc.markShouldSend()
+		cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
 		return true, nil
 	}
 
