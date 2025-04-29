@@ -1,7 +1,0 @@
-jalen:
-    default: true
-    image_amd64: ghcr.io/viamrobotics/canon:amd64
-    image_arm64: ghcr.io/viamrobotics/canon:arm64
-    minimum_date: 2023-03-06T00:15:26.271839721-05:00
-    user: testbot
-    group: testbot
