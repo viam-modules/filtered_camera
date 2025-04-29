@@ -57,9 +57,7 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 	ib.CaptureTill = time.Now().Add(ib.windowDuration(windowSeconds))
 	ib.CleanBuffer_inlock(windowSeconds)
 
-	for _, x := range ib.Buffer {
-		ib.ToSend = append(ib.ToSend, x)
-	}
+	ib.ToSend = append(ib.ToSend, ib.Buffer...)
 
 	ib.Buffer = []CachedData{}
 }

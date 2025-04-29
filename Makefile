@@ -14,9 +14,9 @@ test:
 	go test
 
 lint:
-	gofmt -w -s .
+	golangci-lint run --timeout 10m
 
-module: filtered-camera
+module.tar.gz: filtered-camera
 	tar czf module.tar.gz filtered-camera
 
 all: module test

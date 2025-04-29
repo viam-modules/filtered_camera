@@ -29,5 +29,5 @@ func ImagesToImage(ctx context.Context, ni []camera.NamedImage, mimeType string)
 		return nil, camera.ImageMetadata{}, err
 	}
 
-	return data, camera.ImageMetadata{mimeType}, nil
+	return data, camera.ImageMetadata{MimeType: mimeType}, nil
 }

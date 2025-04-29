@@ -22,7 +22,7 @@ go.work
 
 *~
 
-filtered_camera
 filtered-camera
 foo.json
 module.tar.gz
+.canon.yaml
