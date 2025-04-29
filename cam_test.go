@@ -227,7 +227,6 @@ func TestValidate(t *testing.T) {
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"camera\" is required")
-
 	conf.Camera = "foo"
 	res, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
