@@ -2,6 +2,7 @@ package filtered_camera
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"time"
@@ -22,58 +23,28 @@ var Model = Family.WithModel("filtered-camera")
 
 type Config struct {
 	Camera        string
+	// Deprecated: use VisionServices instead
 	Vision        string
-	WindowSeconds int `json:"window_seconds"`
+	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
+	WindowSeconds  int                   `json:"window_seconds"`
 
 	Classifications map[string]float64
 	Objects         map[string]float64
 }
 
-func (cfg *Config) keepClassifications(cs []classification.Classification) bool {
-	for _, c := range cs {
-		if cfg.keepClassification(c) {
-			return true
-		}
-	}
-	return false
+type VisionServiceConfig struct {
+	Vision          string             `json:"vision"`
+	Objects         map[string]float64 `json:"objects,omitempty"`
+	Classifications map[string]float64 `json:"classifications,omitempty"`
 }
 
-func (cfg *Config) keepClassification(c classification.Classification) bool {
-	min, has := cfg.Classifications[c.Label()]
-	if has && c.Score() > min {
-		return true
+// Validate ensures all parts of the config are valid.
+func (config *VisionServiceConfig) Validate(path string) error {
+	if config.Vision == "" {
+		return resource.NewConfigValidationFieldRequiredError(path, "vision")
 	}
 
-	min, has = cfg.Classifications["*"]
-	if has && c.Score() > min {
-		return true
-	}
-
-	return false
-}
-
-func (cfg *Config) keepObjects(ds []objectdetection.Detection) bool {
-	for _, d := range ds {
-		if cfg.keepObject(d) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (cfg *Config) keepObject(d objectdetection.Detection) bool {
-	min, has := cfg.Objects[d.Label()]
-	if has && d.Score() > min {
-		return true
-	}
-
-	min, has = cfg.Objects["*"]
-	if has && d.Score() > min {
-		return true
-	}
-
-	return false
+	return nil
 }
 
 func (cfg *Config) Validate(path string) ([]string, error) {
@@ -81,11 +52,28 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 		return nil, utils.NewConfigValidationFieldRequiredError(path, "camera")
 	}
 
-	if cfg.Vision == "" {
-		return nil, utils.NewConfigValidationFieldRequiredError(path, "vision")
+	if cfg.Vision == "" && cfg.VisionServices == nil {
+		return nil, utils.NewConfigValidationFieldRequiredError(path, "vision_services")
+	} else if cfg.Vision != "" && cfg.VisionServices != nil {
+		return nil, utils.NewConfigValidationError(path, errors.New("cannot specify both vision and vision_services"))
 	}
 
-	return []string{cfg.Camera, cfg.Vision}, nil
+	deps := []string{cfg.Camera}
+
+	if cfg.Vision != "" {
+		logger := logging.NewBlankLogger("deprecated")
+		logger.Warnf("vision is deprecated, please use vision_services instead")
+		deps = append(deps, cfg.Vision)
+	} else {
+		for idx, vs := range cfg.VisionServices {
+			if err := vs.Validate(fmt.Sprintf("%s.%s.%d", path, "vision-service", idx)); err != nil {
+				return nil, err
+			}
+			deps = append(deps, vs.Vision)
+		}
+	}
+
+	return deps, nil
 }
 
 func init() {
@@ -102,10 +90,42 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
+			if newConf.Vision != "" {
+				fc.visionServices = make([]vision.Service, 1)
+				fc.visionServices[0], err = vision.FromDependencies(deps, newConf.Vision)
+				if err != nil {
+					return nil, err
+				}
 
-			fc.vis, err = vision.FromDependencies(deps, newConf.Vision)
-			if err != nil {
-				return nil, err
+				if newConf.Classifications != nil {
+					fc.allClassifications = make(map[string]map[string]float64)
+					fc.allClassifications[newConf.Vision] = newConf.Classifications
+				}
+				if newConf.Objects != nil {
+					fc.allObjects = make(map[string]map[string]float64)
+					fc.allObjects[newConf.Vision] = newConf.Objects
+				}
+			} else {
+				fc.visionServices = make([]vision.Service, len(newConf.VisionServices))
+				for i, vs := range newConf.VisionServices {
+					fc.visionServices[i], err = vision.FromDependencies(deps, vs.Vision)
+					if err != nil {
+						return nil, err
+					}
+
+					if vs.Classifications != nil {
+						if fc.allClassifications == nil {
+							fc.allClassifications = make(map[string]map[string]float64)
+						}
+						fc.allClassifications[vs.Vision] = vs.Classifications
+					}
+					if vs.Objects != nil {
+						if fc.allObjects == nil {
+							fc.allObjects = make(map[string]map[string]float64)
+						}
+						fc.allObjects[vs.Vision] = vs.Objects
+					}
+				}
 			}
 
 			return fc, nil
@@ -121,9 +141,58 @@ type filteredCamera struct {
 	conf   *Config
 	logger logging.Logger
 
-	cam camera.Camera
-	vis vision.Service
-	buf imagebuffer.ImageBuffer
+	cam                camera.Camera
+	buf                imagebuffer.ImageBuffer
+	visionServices     []vision.Service
+	allClassifications map[string]map[string]float64
+	allObjects         map[string]map[string]float64
+}
+
+func (fc *filteredCamera) keepClassifications(visionService string, cs []classification.Classification) bool {
+	for _, c := range cs {
+		if fc.keepClassification(visionService, c) {
+			return true
+		}
+	}
+	return false
+}
+
+func (fc *filteredCamera) keepClassification(visionService string, c classification.Classification) bool {
+	min, has := fc.allClassifications[visionService][c.Label()]
+	if has && c.Score() > min {
+		return true
+	}
+
+	min, has = fc.allClassifications[visionService]["*"]
+	if has && c.Score() > min {
+		return true
+	}
+
+	return false
+}
+
+func (fc *filteredCamera) keepObjects(visionService string, ds []objectdetection.Detection) bool {
+	for _, d := range ds {
+		if fc.keepObject(visionService, d) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (fc *filteredCamera) keepObject(visionService string, d objectdetection.Detection) bool {
+	min, has := fc.allObjects[visionService][d.Label()]
+	if has && d.Score() > min {
+		return true
+	}
+
+	min, has = fc.allObjects[visionService]["*"]
+	if has && d.Score() > min {
+		return true
+	}
+
+	return false
 }
 
 func (fc *filteredCamera) Name() resource.Name {
@@ -184,36 +253,37 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
+	for _, vs := range fc.visionServices {
+		if len(fc.allClassifications[vs.Name().Name]) > 0 {
+			res, err := vs.Classifications(ctx, img, 100, nil)
+			if err != nil {
+				return false, err
+			}
 
-	if len(fc.conf.Classifications) > 0 {
-		res, err := fc.vis.Classifications(ctx, img, 100, nil)
-		if err != nil {
-			return false, err
+			if fc.keepClassifications(vs.Name().Name, res) {
+				fc.logger.Debugf("keeping image with classifications %v", res)
+				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
+				return true, nil
+			}
 		}
 
-		if fc.conf.keepClassifications(res) {
-			fc.logger.Debugf("keeping image with classifications %v", res)
-			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
+		if len(fc.allObjects[vs.Name().Name]) > 0 {
+			res, err := vs.Detections(ctx, img, nil)
+			if err != nil {
+				return false, err
+			}
+
+			if fc.keepObjects(vs.Name().Name, res) {
+				fc.logger.Debugf("keeping image with objects %v", res)
+				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
+				return true, nil
+			}
+		}
+
+		if time.Now().Before(fc.buf.CaptureTill) {
+			// send, but don't update captureTill
 			return true, nil
 		}
-	}
-
-	if len(fc.conf.Objects) > 0 {
-		res, err := fc.vis.Detections(ctx, img, nil)
-		if err != nil {
-			return false, err
-		}
-
-		if fc.conf.keepObjects(res) {
-			fc.logger.Debugf("keeping image with objects %v", res)
-			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
-			return true, nil
-		}
-	}
-
-	if time.Now().Before(fc.buf.CaptureTill) {
-		// send, but don't update captureTill
-		return true, nil
 	}
 
 	return false, nil
