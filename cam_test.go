@@ -250,6 +250,26 @@ func TestValidate(t *testing.T) {
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
+
+	// inhibitors should be first in the dependency list
+	conf.VisionServices = []VisionServiceConfig{
+		{
+			Vision:          "foo",
+			Inhibit:         false,
+		},
+		{
+			Vision:          "bar",
+			Inhibit: 	   	 false,
+		},
+		{
+			Vision:          "baz",
+			Inhibit: 	   	 true,
+		},
+	}
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldResemble, []string{"foo", "baz", "foo", "bar"})
 }
 
 func TestImage(t *testing.T) {
