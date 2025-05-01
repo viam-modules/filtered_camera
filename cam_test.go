@@ -180,7 +180,7 @@ func TestValidate(t *testing.T) {
 	res, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
-	test.That(t, err.Error(), test.ShouldContainSubstring, "\"vision\" is required")
+	test.That(t, err.Error(), test.ShouldContainSubstring, "\"vision_services\" is required")
 
 	conf.Vision = "foo"
 	res, err = conf.Validate(".")
