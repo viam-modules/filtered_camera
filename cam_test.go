@@ -211,6 +211,30 @@ func TestValidate(t *testing.T) {
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo", "bar"})
+
+	// vision services can implement both classifier and detector
+	conf.VisionServices = []VisionServiceConfig{
+		{
+			Vision:          "foo",
+			Classifications: map[string]float64{"a": .8},
+			Objects: 	   	 map[string]float64{"a": .8},
+		},
+	}
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
+
+	// vision services can not have any classifications or objects
+	conf.VisionServices = []VisionServiceConfig{
+		{
+			Vision: "foo",
+		},
+	}
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
 }
 
 func TestImage(t *testing.T) {

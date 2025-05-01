@@ -23,6 +23,7 @@ var Model = Family.WithModel("filtered-camera")
 
 type Config struct {
 	Camera        string
+	// Deprecated: use VisionServices instead
 	Vision        string
 	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
 	WindowSeconds  int                   `json:"window_seconds"`
@@ -52,7 +53,7 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	}
 
 	if cfg.Vision == "" && cfg.VisionServices == nil {
-		return nil, utils.NewConfigValidationFieldRequiredError(path, "vision")
+		return nil, utils.NewConfigValidationFieldRequiredError(path, "vision_services")
 	} else if cfg.Vision != "" && cfg.VisionServices != nil {
 		return nil, utils.NewConfigValidationError(path, errors.New("cannot specify both vision and vision_services"))
 	}
@@ -60,6 +61,8 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	deps := []string{cfg.Camera}
 
 	if cfg.Vision != "" {
+		logger := logging.NewBlankLogger("deprecated")
+		logger.Warnf("vision is deprecated, please use vision_services instead")
 		deps = append(deps, cfg.Vision)
 	} else {
 		for idx, vs := range cfg.VisionServices {
@@ -97,7 +100,8 @@ func init() {
 				if newConf.Classifications != nil {
 					fc.allClassifications = make(map[string]map[string]float64)
 					fc.allClassifications[newConf.Vision] = newConf.Classifications
-				} else {
+				}
+				if newConf.Objects != nil {
 					fc.allObjects = make(map[string]map[string]float64)
 					fc.allObjects[newConf.Vision] = newConf.Objects
 				}
@@ -114,7 +118,8 @@ func init() {
 							fc.allClassifications = make(map[string]map[string]float64)
 						}
 						fc.allClassifications[vs.Vision] = vs.Classifications
-					} else {
+					}
+					if vs.Objects != nil {
 						if fc.allObjects == nil {
 							fc.allObjects = make(map[string]map[string]float64)
 						}
