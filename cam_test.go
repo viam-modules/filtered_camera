@@ -114,12 +114,20 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
-	// test inhibit
+	// test inhibit should not send with classifications
+	fc.allClassifications = map[string]map[string]float64{"": {"a": .7}}
+	fc.allObjects = map[string]map[string]float64{}
 	fc.inhibitors = map[string]bool{"": true}
 	res, err = fc.shouldSend(context.Background(), a)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
+	// test inhibit should not send with objects
+	fc.allClassifications = map[string]map[string]float64{}
+	fc.allObjects = map[string]map[string]float64{"": {"b": .1}}
+	res, err = fc.shouldSend(context.Background(), b)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
 }
 
 func TestWindow(t *testing.T) {

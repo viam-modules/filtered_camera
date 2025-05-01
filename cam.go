@@ -157,32 +157,32 @@ type filteredCamera struct {
 	inhibitors		   map[string]bool
 }
 
-func (fc *filteredCamera) keepClassifications(visionService string, cs []classification.Classification) bool {
+func (fc *filteredCamera) keepClassifications(visionService string, cs []classification.Classification, inhibit bool) bool {
 	for _, c := range cs {
-		if fc.keepClassification(visionService, c) {
+		if fc.keepClassification(visionService, c, inhibit) {
 			return true
 		}
 	}
 	return false
 }
 
-func (fc *filteredCamera) keepClassification(visionService string, c classification.Classification) bool {
+func (fc *filteredCamera) keepClassification(visionService string, c classification.Classification, inhibit bool) bool {
 	min, has := fc.allClassifications[visionService][c.Label()]
 	if has && c.Score() > min {
-		return true
+		return !inhibit
 	}
 
 	min, has = fc.allClassifications[visionService]["*"]
 	if has && c.Score() > min {
-		return true
+		return !inhibit
 	}
 
 	return false
 }
 
-func (fc *filteredCamera) keepObjects(visionService string, ds []objectdetection.Detection) bool {
+func (fc *filteredCamera) keepObjects(visionService string, ds []objectdetection.Detection, inhibit bool) bool {
 	for _, d := range ds {
-		if fc.keepObject(visionService, d) {
+		if fc.keepObject(visionService, d, inhibit) {
 			return true
 		}
 	}
@@ -190,15 +190,15 @@ func (fc *filteredCamera) keepObjects(visionService string, ds []objectdetection
 	return false
 }
 
-func (fc *filteredCamera) keepObject(visionService string, d objectdetection.Detection) bool {
+func (fc *filteredCamera) keepObject(visionService string, d objectdetection.Detection, inhibit bool) bool {
 	min, has := fc.allObjects[visionService][d.Label()]
 	if has && d.Score() > min {
-		return true
+		return !inhibit
 	}
 
 	min, has = fc.allObjects[visionService]["*"]
 	if has && d.Score() > min {
-		return true
+		return !inhibit
 	}
 
 	return false
@@ -263,18 +263,14 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
 	for _, vs := range fc.visionServices {
-		// should not send if the vision service is an inhibitor
-		if fc.inhibitors[vs.Name().Name] {
-			return false, nil
-		}
-
+		_, inhibit := fc.inhibitors[vs.Name().Name]
 		if len(fc.allClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				return false, err
 			}
 
-			if fc.keepClassifications(vs.Name().Name, res) {
+			if fc.keepClassifications(vs.Name().Name, res, inhibit) {
 				fc.logger.Debugf("keeping image with classifications %v", res)
 				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 				return true, nil
@@ -287,7 +283,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 				return false, err
 			}
 
-			if fc.keepObjects(vs.Name().Name, res) {
+			if fc.keepObjects(vs.Name().Name, res, inhibit) {
 				fc.logger.Debugf("keeping image with objects %v", res)
 				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 				return true, nil
