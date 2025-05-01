@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/viam-modules/filtered_camera/image_buffer"
+	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
@@ -70,7 +70,11 @@ func TestShouldSend(t *testing.T) {
 			Objects:         map[string]float64{"b": .8},
 		},
 		logger: logger,
-		vis:    getDummyVisionService(),
+		visionServices: []vision.Service{
+			getDummyVisionService(),
+		},
+		allClassifications: map[string]map[string]float64{"": {"a": .8}},
+		allObjects:         map[string]map[string]float64{"": {"b": .8}},
 	}
 
 	res, err := fc.shouldSend(context.Background(), d)
@@ -99,8 +103,8 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
-	fc.conf.Classifications["*"] = .8
-	fc.conf.Objects["*"] = .8
+	fc.allClassifications[""] = map[string]float64{"*": .8}
+	fc.allObjects[""] = map[string]float64{"*": .8}
 
 	res, err = fc.shouldSend(context.Background(), e)
 	test.That(t, err, test.ShouldBeNil)
@@ -122,7 +126,9 @@ func TestWindow(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		vis:    getDummyVisionService(),
+		visionServices: []vision.Service{
+			getDummyVisionService(),
+		},
 	}
 
 	a := time.Now()
@@ -169,7 +175,7 @@ func TestValidate(t *testing.T) {
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"camera\" is required")
-	
+
 	conf.Camera = "foo"
 	res, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
@@ -181,6 +187,30 @@ func TestValidate(t *testing.T) {
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
+
+	// should error if both vision and vision_service are set
+	conf.VisionServices = []VisionServiceConfig{
+		{
+			Vision:          "foo",
+			Classifications: map[string]float64{"a": .8},
+		},
+		{
+			Vision:  "bar",
+			Objects: map[string]float64{"b": .8},
+		},
+	}
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldBeNil)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot specify both vision and vision_services")
+
+	// when vision is empty and vision_services is set, it should not error
+	// and return the camera and vision service names
+	conf.Vision = ""
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldResemble, []string{"foo", "foo", "bar"})
 }
 
 func TestImage(t *testing.T) {
@@ -193,7 +223,9 @@ func TestImage(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		vis:    getDummyVisionService(),
+		visionServices: []vision.Service{
+			getDummyVisionService(),
+		},
 		buf:    imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
@@ -238,7 +270,9 @@ func TestImages(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		vis:    getDummyVisionService(),
+		visionServices: []vision.Service{
+			getDummyVisionService(),
+		},
 		buf:    imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
@@ -276,7 +310,9 @@ func TestProperties(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		vis:    getDummyVisionService(),
+		visionServices: []vision.Service{
+			getDummyVisionService(),
+		},
 		buf:    imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			PropertiesFunc: func(ctx context.Context) (camera.Properties, error) {
