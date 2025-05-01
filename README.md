@@ -57,6 +57,9 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
 | `classifications` | float64 | Optional | \*\***DEPRECATED**\*\* A map of classification labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a classifier. You can find these labels by testing your vision service. |
 | `objects` | float64 | Optional | \*\***DEPRECATED**\*\* A map of object detection labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a detector. You can find these labels by testing your vision service. |
 
+> [!WARNING]
+> If a vision service has no specified classifications and/or objects, it won't trigger any data capture.
+
 ### Example configurations
 
 ```json

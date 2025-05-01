@@ -226,6 +226,7 @@ func TestValidate(t *testing.T) {
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
 
 	// vision services can not have any classifications or objects
+	// this would mean that no images would be captured
 	conf.VisionServices = []VisionServiceConfig{
 		{
 			Vision: "foo",
