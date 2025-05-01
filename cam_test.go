@@ -114,6 +114,12 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
+	// test inhibit
+	fc.inhibitors = map[string]bool{"": true}
+	res, err = fc.shouldSend(context.Background(), a)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
+
 }
 
 func TestWindow(t *testing.T) {

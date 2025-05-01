@@ -36,6 +36,7 @@ type VisionServiceConfig struct {
 	Vision          string             `json:"vision"`
 	Objects         map[string]float64 `json:"objects,omitempty"`
 	Classifications map[string]float64 `json:"classifications,omitempty"`
+	Inhibit 		bool 			   `json:"inhibit"`
 }
 
 // Validate ensures all parts of the config are valid.
@@ -125,6 +126,13 @@ func init() {
 						}
 						fc.allObjects[vs.Vision] = vs.Objects
 					}
+
+					if vs.Inhibit {
+						if fc.inhibitors == nil {
+							fc.inhibitors = make(map[string]bool)
+						}
+						fc.inhibitors[vs.Vision] = vs.Inhibit
+					}
 				}
 			}
 
@@ -146,6 +154,7 @@ type filteredCamera struct {
 	visionServices     []vision.Service
 	allClassifications map[string]map[string]float64
 	allObjects         map[string]map[string]float64
+	inhibitors		   map[string]bool
 }
 
 func (fc *filteredCamera) keepClassifications(visionService string, cs []classification.Classification) bool {
@@ -254,6 +263,11 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
 	for _, vs := range fc.visionServices {
+		// should not send if the vision service is an inhibitor
+		if fc.inhibitors[vs.Name().Name] {
+			return false, nil
+		}
+
 		if len(fc.allClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
