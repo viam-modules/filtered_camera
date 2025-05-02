@@ -22,9 +22,9 @@ import (
 var Model = Family.WithModel("filtered-camera")
 
 type Config struct {
-	Camera        string
+	Camera string
 	// Deprecated: use VisionServices instead
-	Vision        string
+	Vision         string
 	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
 	WindowSeconds  int                   `json:"window_seconds"`
 
@@ -36,7 +36,7 @@ type VisionServiceConfig struct {
 	Vision          string             `json:"vision"`
 	Objects         map[string]float64 `json:"objects,omitempty"`
 	Classifications map[string]float64 `json:"classifications,omitempty"`
-	Inhibit 		bool 			   `json:"inhibit"`
+	Inhibit         bool               `json:"inhibit"`
 }
 
 // Validate ensures all parts of the config are valid.
@@ -101,8 +101,8 @@ func init() {
 				return nil, err
 			}
 			if newConf.Vision != "" {
-				fc.visionServices = make([]vision.Service, 1)
-				fc.visionServices[0], err = vision.FromDependencies(deps, newConf.Vision)
+				fc.otherVisionServices = make([]vision.Service, 1)
+				fc.otherVisionServices[0], err = vision.FromDependencies(deps, newConf.Vision)
 				if err != nil {
 					return nil, err
 				}
@@ -116,11 +116,18 @@ func init() {
 					fc.allObjects[newConf.Vision] = newConf.Objects
 				}
 			} else {
-				fc.visionServices = make([]vision.Service, len(newConf.VisionServices))
-				for i, vs := range newConf.VisionServices {
-					fc.visionServices[i], err = vision.FromDependencies(deps, vs.Vision)
+				fc.inhibitors = []vision.Service{}
+				fc.otherVisionServices = []vision.Service{}
+				for _, vs := range newConf.VisionServices {
+					visionService, err := vision.FromDependencies(deps, vs.Vision)
 					if err != nil {
 						return nil, err
+					}
+
+					if vs.Inhibit {
+						fc.inhibitors = append(fc.inhibitors, visionService)
+					} else {
+						fc.otherVisionServices = append(fc.otherVisionServices, visionService)
 					}
 
 					if vs.Classifications != nil {
@@ -134,13 +141,6 @@ func init() {
 							fc.allObjects = make(map[string]map[string]float64)
 						}
 						fc.allObjects[vs.Vision] = vs.Objects
-					}
-
-					if vs.Inhibit {
-						if fc.inhibitors == nil {
-							fc.inhibitors = make(map[string]bool)
-						}
-						fc.inhibitors[vs.Vision] = vs.Inhibit
 					}
 				}
 			}
@@ -158,12 +158,12 @@ type filteredCamera struct {
 	conf   *Config
 	logger logging.Logger
 
-	cam                camera.Camera
-	buf                imagebuffer.ImageBuffer
-	visionServices     []vision.Service
-	allClassifications map[string]map[string]float64
-	allObjects         map[string]map[string]float64
-	inhibitors		   map[string]bool
+	cam                 camera.Camera
+	buf                 imagebuffer.ImageBuffer
+	inhibitors          []vision.Service
+	otherVisionServices []vision.Service
+	allClassifications  map[string]map[string]float64
+	allObjects          map[string]map[string]float64
 }
 
 func (fc *filteredCamera) anyClassificationsMatch(visionService string, cs []classification.Classification) bool {
@@ -271,8 +271,8 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
-	for _, vs := range fc.visionServices {
-		_, inhibit := fc.inhibitors[vs.Name().Name]
+	// inhibitors are first priority
+	for _, vs := range fc.inhibitors {
 		if len(fc.allClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
@@ -280,9 +280,35 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			}
 
 			match := fc.anyClassificationsMatch(vs.Name().Name, res)
-			if match && inhibit {
+			if match {
+				fc.logger.Debugf("rejecting image with classifications %v", res)
 				return false, nil
-			} else if match {
+			}
+		}
+
+		if len(fc.allObjects[vs.Name().Name]) > 0 {
+			res, err := vs.Detections(ctx, img, nil)
+			if err != nil {
+				return false, err
+			}
+
+			match := fc.anyDetectionsMatch(vs.Name().Name, res)
+			if match {
+				fc.logger.Debugf("rejecting image with objects %v", res)
+				return false, nil
+			}
+		}
+	}
+
+	for _, vs := range fc.otherVisionServices {
+		if len(fc.allClassifications[vs.Name().Name]) > 0 {
+			res, err := vs.Classifications(ctx, img, 100, nil)
+			if err != nil {
+				return false, err
+			}
+
+			match := fc.anyClassificationsMatch(vs.Name().Name, res)
+			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
 				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 				return true, nil
@@ -296,9 +322,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			}
 
 			match := fc.anyDetectionsMatch(vs.Name().Name, res)
-			if match && inhibit {
-				return false, nil
-			} else if match {
+			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
 				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 				return true, nil

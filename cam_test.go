@@ -70,7 +70,7 @@ func TestShouldSend(t *testing.T) {
 			Objects:         map[string]float64{"b": .8},
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
 		allClassifications: map[string]map[string]float64{"": {"a": .8}},
@@ -117,7 +117,9 @@ func TestShouldSend(t *testing.T) {
 	// test inhibit should not send with classifications
 	fc.allClassifications = map[string]map[string]float64{"": {"a": .7}}
 	fc.allObjects = map[string]map[string]float64{}
-	fc.inhibitors = map[string]bool{"": true}
+	fc.inhibitors = []vision.Service{
+		getDummyVisionService(),
+	}
 	res, err = fc.shouldSend(context.Background(), a)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
@@ -140,7 +142,7 @@ func TestWindow(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
 	}
@@ -231,7 +233,7 @@ func TestValidate(t *testing.T) {
 		{
 			Vision:          "foo",
 			Classifications: map[string]float64{"a": .8},
-			Objects: 	   	 map[string]float64{"a": .8},
+			Objects:         map[string]float64{"a": .8},
 		},
 	}
 	res, err = conf.Validate(".")
@@ -254,16 +256,16 @@ func TestValidate(t *testing.T) {
 	// inhibitors should be first in the dependency list
 	conf.VisionServices = []VisionServiceConfig{
 		{
-			Vision:          "foo",
-			Inhibit:         false,
+			Vision:  "foo",
+			Inhibit: false,
 		},
 		{
-			Vision:          "bar",
-			Inhibit: 	   	 false,
+			Vision:  "bar",
+			Inhibit: false,
 		},
 		{
-			Vision:          "baz",
-			Inhibit: 	   	 true,
+			Vision:  "baz",
+			Inhibit: true,
 		},
 	}
 	res, err = conf.Validate(".")
@@ -282,10 +284,10 @@ func TestImage(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf:    imagebuffer.ImageBuffer{},
+		buf: imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -329,10 +331,10 @@ func TestImages(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf:    imagebuffer.ImageBuffer{},
+		buf: imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
@@ -357,9 +359,9 @@ func TestProperties(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 
 	properties := camera.Properties{
-		SupportsPCD:    false,
-		ImageType:    	camera.ImageType("color"),
-		MimeTypes:  	[]string{utils.MimeTypeJPEG},
+		SupportsPCD: false,
+		ImageType:   camera.ImageType("color"),
+		MimeTypes:   []string{utils.MimeTypeJPEG},
 	}
 
 	fc := &filteredCamera{
@@ -369,10 +371,10 @@ func TestProperties(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf:    imagebuffer.ImageBuffer{},
+		buf: imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			PropertiesFunc: func(ctx context.Context) (camera.Properties, error) {
 				return properties, nil
