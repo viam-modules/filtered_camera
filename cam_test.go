@@ -130,6 +130,42 @@ func TestShouldSend(t *testing.T) {
 	res, err = fc.shouldSend(context.Background(), b)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
+
+	// test accepted stats update properly and don't affect rejected stats
+	fc.acceptedStats = imageStats{}
+	fc.rejectedStats = imageStats{}
+	fc.inhibitors = []vision.Service{}
+	fc.allClassifications = map[string]map[string]float64{"": {"a": .8}}
+	res, err = fc.shouldSend(context.Background(), a)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, true)
+	test.That(t, fc.acceptedStats.total, test.ShouldEqual, 1)
+	test.That(t, fc.acceptedStats.breakdown["a"], test.ShouldEqual, 1)
+	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 0)
+	_, ok := fc.rejectedStats.breakdown["a"]
+	test.That(t, ok, test.ShouldEqual, false)
+
+	// test rejected stats update properly and don't affect accepted stats
+	fc.acceptedStats = imageStats{}
+	fc.inhibitors = []vision.Service{
+		getDummyVisionService(),
+	}
+	res, err = fc.shouldSend(context.Background(), a)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
+	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
+	test.That(t, fc.rejectedStats.breakdown["a"], test.ShouldEqual, 1)
+	test.That(t, fc.acceptedStats.total, test.ShouldEqual, 0)
+	_, ok = fc.acceptedStats.breakdown["a"]
+	test.That(t, ok, test.ShouldEqual, false)
+
+	// test that image that does not match any classification or object is rejected
+	fc.rejectedStats = imageStats{}
+	res, err = fc.shouldSend(context.Background(), d)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
+	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
+	test.That(t, fc.rejectedStats.breakdown["no vision services accepted"], test.ShouldEqual, 1)
 }
 
 func TestWindow(t *testing.T) {
@@ -387,4 +423,59 @@ func TestProperties(t *testing.T) {
 	res, err := fc.Properties(ctx)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, properties)
+}
+
+func TestDoCommand(t *testing.T) {
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications: map[string]float64{"a": .8},
+			Objects:         map[string]float64{"b": .8},
+			WindowSeconds:   10,
+		},
+		otherVisionServices: []vision.Service{
+			getDummyVisionService(),
+		},
+		buf:    imagebuffer.ImageBuffer{},
+		cam: &inject.Camera{
+			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+				return []camera.NamedImage{
+					{Image: a, SourceName: ""},
+					{Image: b, SourceName: ""},
+					{Image: c, SourceName: ""},
+				}, resource.ResponseMetadata{}, nil
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	res, err := fc.DoCommand(ctx, nil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+
+	acceptedStats := res["accepted"].(map[string]interface{})
+	test.That(t, acceptedStats["total"], test.ShouldEqual, 0)
+	test.That(t, acceptedStats["vision"], test.ShouldBeNil)
+
+	rejectedStats := res["rejected"].(map[string]interface{})
+	test.That(t, rejectedStats["total"], test.ShouldEqual, 0)
+	test.That(t, rejectedStats["vision"], test.ShouldBeNil)
+
+	fc.acceptedStats = imageStats{total: 1, breakdown: map[string]int{"foo": 1}}
+	fc.rejectedStats = imageStats{total: 2, breakdown: map[string]int{"bar": 2}}
+	res, err = fc.DoCommand(ctx, nil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+
+	acceptedStats = res["accepted"].(map[string]interface{})
+	test.That(t, acceptedStats["total"], test.ShouldEqual, 1)
+	visionBreakdown, ok := acceptedStats["vision"].(map[string]int)
+	test.That(t, ok, test.ShouldEqual, true)
+	test.That(t, visionBreakdown, test.ShouldResemble, map[string]int{"foo": 1})
+	
+	rejectedStats = res["rejected"].(map[string]interface{})
+	test.That(t, rejectedStats["total"], test.ShouldEqual, 2)
+	visionBreakdown, ok = rejectedStats["vision"].(map[string]int)
+	test.That(t, ok, test.ShouldEqual, true)
+	test.That(t, visionBreakdown, test.ShouldResemble, map[string]int{"bar": 2})
 }
