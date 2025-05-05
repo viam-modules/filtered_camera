@@ -165,7 +165,7 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
-	test.That(t, fc.rejectedStats.breakdown["no vision services accepted"], test.ShouldEqual, 1)
+	test.That(t, fc.rejectedStats.breakdown["no vision services triggered"], test.ShouldEqual, 1)
 }
 
 func TestWindow(t *testing.T) {

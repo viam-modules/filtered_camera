@@ -144,6 +144,8 @@ func init() {
 					}
 				}
 			}
+			fc.acceptedStats.startTime = time.Now()
+			fc.rejectedStats.startTime = time.Now()
 
 			return fc, nil
 		},
@@ -171,6 +173,7 @@ type filteredCamera struct {
 type imageStats struct {
 	total 	  int
 	breakdown map[string]int
+	startTime time.Time
 }
 
 func (is *imageStats) update(visionService string) {
@@ -190,14 +193,22 @@ func (fc *filteredCamera) formatStats() map[string]interface{} {
 	stats["accepted"] = make(map[string]interface{})
 	stats["rejected"] = make(map[string]interface{})
 
-	acceptedStats := stats["accepted"].(map[string]interface{})
-	rejectedStats := stats["rejected"].(map[string]interface{})
+	if acceptedStats, ok := stats["accepted"].(map[string]interface{}); !ok {
+		fc.logger.Warnf("failed to get stats")
+		return nil
+	} else {
+		acceptedStats["total"] = fc.acceptedStats.total
+		acceptedStats["vision"] = fc.acceptedStats.breakdown
+	}
+	if rejectedStats, ok := stats["rejected"].(map[string]interface{}); !ok {
+		fc.logger.Warnf("failed to get stats")
+		return nil
+	} else {
+		rejectedStats["total"] = fc.rejectedStats.total
+		rejectedStats["vision"] = fc.rejectedStats.breakdown
+	}
 
-	acceptedStats["total"] = fc.acceptedStats.total
-	acceptedStats["vision"] = fc.acceptedStats.breakdown
-	
-	rejectedStats["total"] = fc.rejectedStats.total
-	rejectedStats["vision"] = fc.rejectedStats.breakdown
+	stats["start_time"] = fc.acceptedStats.startTime.Format(time.RFC1123)
 	return stats
 }
 
@@ -374,7 +385,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 		}
 	}
 
-	fc.rejectedStats.update("no vision services accepted")
+	fc.rejectedStats.update("no vision services triggered")
 	return false, nil
 }
 
