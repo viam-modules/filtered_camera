@@ -194,14 +194,14 @@ func (fc *filteredCamera) formatStats() map[string]interface{} {
 	stats["rejected"] = make(map[string]interface{})
 
 	if acceptedStats, ok := stats["accepted"].(map[string]interface{}); !ok {
-		fc.logger.Warnf("failed to get stats")
+		fc.logger.Errorf("failed to get stats")
 		return nil
 	} else {
 		acceptedStats["total"] = fc.acceptedStats.total
 		acceptedStats["vision"] = fc.acceptedStats.breakdown
 	}
 	if rejectedStats, ok := stats["rejected"].(map[string]interface{}); !ok {
-		fc.logger.Warnf("failed to get stats")
+		fc.logger.Errorf("failed to get stats")
 		return nil
 	} else {
 		rejectedStats["total"] = fc.rejectedStats.total
