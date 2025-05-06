@@ -8,6 +8,7 @@ import (
 
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
+	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/rimage"
@@ -332,9 +333,12 @@ func TestImage(t *testing.T) {
 				}, resource.ResponseMetadata{}, nil
 			},
 		},
+		allClassifications: map[string]map[string]float64{"": {"a": .8}},
+		allObjects:         map[string]map[string]float64{"": {"b": .8}},
 	}
 
 	ctx := context.Background()
+	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
 	res, meta, err := fc.Image(ctx, utils.MimeTypeJPEG, nil)
 	test.That(t, err, test.ShouldBeNil)
@@ -375,9 +379,12 @@ func TestImages(t *testing.T) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
 			},
 		},
+		allClassifications: map[string]map[string]float64{"": {"a": .8}},
+		allObjects:         map[string]map[string]float64{"": {"b": .8}},
 	}
 
 	ctx := context.Background()
+	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
 	res, meta, err := fc.Images(ctx)
 	test.That(t, err, test.ShouldBeNil)

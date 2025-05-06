@@ -19,6 +19,7 @@ type ImageBuffer struct {
 	Buffer      []CachedData
 	ToSend      []CachedData
 	CaptureTill time.Time
+	LastCached  []camera.NamedImage
 }
 
 func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
@@ -62,13 +63,9 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 	ib.Buffer = []CachedData{}
 }
 
-func (ib *ImageBuffer) LastCaptured() []camera.NamedImage {
+func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
 	ib.Mu.Lock()
 	defer ib.Mu.Unlock()
 
-	if len(ib.ToSend) == 0 {
-		return nil
-	}
-
-	return ib.ToSend[len(ib.ToSend)-1].Imgs
+	ib.LastCached = images
 }
