@@ -287,10 +287,13 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		return images, meta, err
 	}
 
+	fc.logger.Info("IMAGES RECEIVED")
 	if !IsFromDataMgmt(ctx, extra) {
+		fc.logger.Info("NOT FROM DATA MGMT, SENDING IMAGES")
 		return images, meta, nil
 	}
 
+	fc.logger.Info("FROM DATA MGMT, CHECKING FOR SENDING")
 	for _, img := range images {
 		shouldSend, err := fc.shouldSend(ctx, img.Image)
 		if err != nil {
@@ -298,10 +301,12 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		}
 
 		if shouldSend {
+			fc.logger.Info("SENDING AN IMAGE")
 			return images, meta, nil
 		}
 	}
 
+	fc.logger.Info("NOT SENDING AN IMAGE, ADDING TO BUFFER")
 	fc.buf.Mu.Lock()
 	defer fc.buf.Mu.Unlock()
 
@@ -310,10 +315,20 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	if len(fc.buf.ToSend) > 0 {
 		x := fc.buf.ToSend[0]
 		fc.buf.ToSend = fc.buf.ToSend[1:]
+		fc.logger.Infof("SENDING AN IMAGE FROM BUFFER")
 		return x.Imgs, x.Meta, nil
 	}
 
-	return nil, meta, data.ErrNoCaptureToStore
+	fc.logger.Infof("NOT SENDING AN IMAGE FROM BUFFER")
+	
+	var ret []camera.NamedImage
+	if fc.buf.LastCaptured() != nil {
+		ret = fc.buf.LastCaptured()
+	} else {
+		ret = nil
+	}
+
+	return ret, meta, data.ErrNoCaptureToStore
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
