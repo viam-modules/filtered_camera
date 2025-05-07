@@ -22,9 +22,9 @@ import (
 var Model = Family.WithModel("filtered-camera")
 
 type Config struct {
-	Camera        string
+	Camera string
 	// Deprecated: use VisionServices instead
-	Vision        string
+	Vision         string
 	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
 	WindowSeconds  int                   `json:"window_seconds"`
 
@@ -36,6 +36,7 @@ type VisionServiceConfig struct {
 	Vision          string             `json:"vision"`
 	Objects         map[string]float64 `json:"objects,omitempty"`
 	Classifications map[string]float64 `json:"classifications,omitempty"`
+	Inhibit         bool               `json:"inhibit"`
 }
 
 // Validate ensures all parts of the config are valid.
@@ -59,6 +60,8 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	}
 
 	deps := []string{cfg.Camera}
+	inhibitors := []string{}
+	otherVisionServices := []string{}
 
 	if cfg.Vision != "" {
 		logger := logging.NewBlankLogger("deprecated")
@@ -69,9 +72,16 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 			if err := vs.Validate(fmt.Sprintf("%s.%s.%d", path, "vision-service", idx)); err != nil {
 				return nil, err
 			}
-			deps = append(deps, vs.Vision)
+			if vs.Inhibit {
+				inhibitors = append(inhibitors, vs.Vision)
+			} else {
+				otherVisionServices = append(otherVisionServices, vs.Vision)
+			}
 		}
 	}
+
+	deps = append(deps, inhibitors...)
+	deps = append(deps, otherVisionServices...)
 
 	return deps, nil
 }
@@ -91,8 +101,8 @@ func init() {
 				return nil, err
 			}
 			if newConf.Vision != "" {
-				fc.visionServices = make([]vision.Service, 1)
-				fc.visionServices[0], err = vision.FromDependencies(deps, newConf.Vision)
+				fc.otherVisionServices = make([]vision.Service, 1)
+				fc.otherVisionServices[0], err = vision.FromDependencies(deps, newConf.Vision)
 				if err != nil {
 					return nil, err
 				}
@@ -106,11 +116,18 @@ func init() {
 					fc.allObjects[newConf.Vision] = newConf.Objects
 				}
 			} else {
-				fc.visionServices = make([]vision.Service, len(newConf.VisionServices))
-				for i, vs := range newConf.VisionServices {
-					fc.visionServices[i], err = vision.FromDependencies(deps, vs.Vision)
+				fc.inhibitors = []vision.Service{}
+				fc.otherVisionServices = []vision.Service{}
+				for _, vs := range newConf.VisionServices {
+					visionService, err := vision.FromDependencies(deps, vs.Vision)
 					if err != nil {
 						return nil, err
+					}
+
+					if vs.Inhibit {
+						fc.inhibitors = append(fc.inhibitors, visionService)
+					} else {
+						fc.otherVisionServices = append(fc.otherVisionServices, visionService)
 					}
 
 					if vs.Classifications != nil {
@@ -127,6 +144,8 @@ func init() {
 					}
 				}
 			}
+			fc.acceptedStats.startTime = time.Now()
+			fc.rejectedStats.startTime = time.Now()
 
 			return fc, nil
 		},
@@ -141,23 +160,68 @@ type filteredCamera struct {
 	conf   *Config
 	logger logging.Logger
 
-	cam                camera.Camera
-	buf                imagebuffer.ImageBuffer
-	visionServices     []vision.Service
-	allClassifications map[string]map[string]float64
-	allObjects         map[string]map[string]float64
+	cam                 camera.Camera
+	buf                 imagebuffer.ImageBuffer
+	inhibitors          []vision.Service
+	otherVisionServices []vision.Service
+	allClassifications  map[string]map[string]float64
+	allObjects          map[string]map[string]float64
+	acceptedStats	   imageStats
+	rejectedStats	   imageStats
 }
 
-func (fc *filteredCamera) keepClassifications(visionService string, cs []classification.Classification) bool {
+type imageStats struct {
+	total 	  int
+	breakdown map[string]int
+	startTime time.Time
+}
+
+func (is *imageStats) update(visionService string) {
+	is.total++
+	if is.breakdown == nil {
+		is.breakdown = make(map[string]int)
+	}
+	if _, ok := is.breakdown[visionService]; !ok {
+		is.breakdown[visionService] = 1
+		return
+	}
+	is.breakdown[visionService]++
+}
+
+func (fc *filteredCamera) formatStats() map[string]interface{} {
+	stats := make(map[string]interface{})
+	stats["accepted"] = make(map[string]interface{})
+	stats["rejected"] = make(map[string]interface{})
+
+	if acceptedStats, ok := stats["accepted"].(map[string]interface{}); !ok {
+		fc.logger.Errorf("failed to get stats")
+		return nil
+	} else {
+		acceptedStats["total"] = fc.acceptedStats.total
+		acceptedStats["vision"] = fc.acceptedStats.breakdown
+	}
+	if rejectedStats, ok := stats["rejected"].(map[string]interface{}); !ok {
+		fc.logger.Errorf("failed to get stats")
+		return nil
+	} else {
+		rejectedStats["total"] = fc.rejectedStats.total
+		rejectedStats["vision"] = fc.rejectedStats.breakdown
+	}
+
+	stats["start_time"] = fc.acceptedStats.startTime.Format(time.RFC1123)
+	return stats
+}
+
+func (fc *filteredCamera) anyClassificationsMatch(visionService string, cs []classification.Classification) (bool, classification.Classification) {
 	for _, c := range cs {
-		if fc.keepClassification(visionService, c) {
-			return true
+		if fc.classificationMatches(visionService, c) {
+			return true, c
 		}
 	}
-	return false
+	return false, nil
 }
 
-func (fc *filteredCamera) keepClassification(visionService string, c classification.Classification) bool {
+func (fc *filteredCamera) classificationMatches(visionService string, c classification.Classification) bool {
 	min, has := fc.allClassifications[visionService][c.Label()]
 	if has && c.Score() > min {
 		return true
@@ -171,17 +235,17 @@ func (fc *filteredCamera) keepClassification(visionService string, c classificat
 	return false
 }
 
-func (fc *filteredCamera) keepObjects(visionService string, ds []objectdetection.Detection) bool {
+func (fc *filteredCamera) anyDetectionsMatch(visionService string, ds []objectdetection.Detection) (bool, objectdetection.Detection) {
 	for _, d := range ds {
-		if fc.keepObject(visionService, d) {
-			return true
+		if fc.detectionMatches(visionService, d) {
+			return true, d
 		}
 	}
 
-	return false
+	return false, nil
 }
 
-func (fc *filteredCamera) keepObject(visionService string, d objectdetection.Detection) bool {
+func (fc *filteredCamera) detectionMatches(visionService string, d objectdetection.Detection) bool {
 	min, has := fc.allObjects[visionService][d.Label()]
 	if has && d.Score() > min {
 		return true
@@ -200,7 +264,7 @@ func (fc *filteredCamera) Name() resource.Name {
 }
 
 func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
-	return nil, resource.ErrDoUnimplemented
+	return fc.formatStats(), nil
 }
 
 func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
@@ -253,16 +317,49 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
-	for _, vs := range fc.visionServices {
+	// inhibitors are first priority
+	for _, vs := range fc.inhibitors {
 		if len(fc.allClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				return false, err
 			}
 
-			if fc.keepClassifications(vs.Name().Name, res) {
+			match, label := fc.anyClassificationsMatch(vs.Name().Name, res)
+			if match {
+				fc.logger.Debugf("rejecting image with classifications %v", res)
+				fc.rejectedStats.update(label.Label())
+				return false, nil
+			}
+		}
+
+		if len(fc.allObjects[vs.Name().Name]) > 0 {
+			res, err := vs.Detections(ctx, img, nil)
+			if err != nil {
+				return false, err
+			}
+
+			match, label := fc.anyDetectionsMatch(vs.Name().Name, res)
+			if match {
+				fc.logger.Debugf("rejecting image with objects %v", res)
+				fc.rejectedStats.update(label.Label())
+				return false, nil
+			}
+		}
+	}
+
+	for _, vs := range fc.otherVisionServices {
+		if len(fc.allClassifications[vs.Name().Name]) > 0 {
+			res, err := vs.Classifications(ctx, img, 100, nil)
+			if err != nil {
+				return false, err
+			}
+
+			match, label := fc.anyClassificationsMatch(vs.Name().Name, res)
+			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
 				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
+				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
 		}
@@ -273,9 +370,11 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 				return false, err
 			}
 
-			if fc.keepObjects(vs.Name().Name, res) {
+			match, label := fc.anyDetectionsMatch(vs.Name().Name, res)
+			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
 				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
+				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
 		}
@@ -286,6 +385,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 		}
 	}
 
+	fc.rejectedStats.update("no vision services triggered")
 	return false, nil
 }
 

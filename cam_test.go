@@ -70,7 +70,7 @@ func TestShouldSend(t *testing.T) {
 			Objects:         map[string]float64{"b": .8},
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
 		allClassifications: map[string]map[string]float64{"": {"a": .8}},
@@ -114,6 +114,58 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
+	// test inhibit should not send with classifications
+	fc.allClassifications = map[string]map[string]float64{"": {"a": .7}}
+	fc.allObjects = map[string]map[string]float64{}
+	fc.inhibitors = []vision.Service{
+		getDummyVisionService(),
+	}
+	res, err = fc.shouldSend(context.Background(), a)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
+
+	// test inhibit should not send with objects
+	fc.allClassifications = map[string]map[string]float64{}
+	fc.allObjects = map[string]map[string]float64{"": {"b": .1}}
+	res, err = fc.shouldSend(context.Background(), b)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
+
+	// test accepted stats update properly and don't affect rejected stats
+	fc.acceptedStats = imageStats{}
+	fc.rejectedStats = imageStats{}
+	fc.inhibitors = []vision.Service{}
+	fc.allClassifications = map[string]map[string]float64{"": {"a": .8}}
+	res, err = fc.shouldSend(context.Background(), a)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, true)
+	test.That(t, fc.acceptedStats.total, test.ShouldEqual, 1)
+	test.That(t, fc.acceptedStats.breakdown["a"], test.ShouldEqual, 1)
+	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 0)
+	_, ok := fc.rejectedStats.breakdown["a"]
+	test.That(t, ok, test.ShouldEqual, false)
+
+	// test rejected stats update properly and don't affect accepted stats
+	fc.acceptedStats = imageStats{}
+	fc.inhibitors = []vision.Service{
+		getDummyVisionService(),
+	}
+	res, err = fc.shouldSend(context.Background(), a)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
+	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
+	test.That(t, fc.rejectedStats.breakdown["a"], test.ShouldEqual, 1)
+	test.That(t, fc.acceptedStats.total, test.ShouldEqual, 0)
+	_, ok = fc.acceptedStats.breakdown["a"]
+	test.That(t, ok, test.ShouldEqual, false)
+
+	// test that image that does not match any classification or object is rejected
+	fc.rejectedStats = imageStats{}
+	res, err = fc.shouldSend(context.Background(), d)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
+	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
+	test.That(t, fc.rejectedStats.breakdown["no vision services triggered"], test.ShouldEqual, 1)
 }
 
 func TestWindow(t *testing.T) {
@@ -126,7 +178,7 @@ func TestWindow(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
 	}
@@ -217,7 +269,7 @@ func TestValidate(t *testing.T) {
 		{
 			Vision:          "foo",
 			Classifications: map[string]float64{"a": .8},
-			Objects: 	   	 map[string]float64{"a": .8},
+			Objects:         map[string]float64{"a": .8},
 		},
 	}
 	res, err = conf.Validate(".")
@@ -236,6 +288,26 @@ func TestValidate(t *testing.T) {
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
+
+	// inhibitors should be first in the dependency list
+	conf.VisionServices = []VisionServiceConfig{
+		{
+			Vision:  "foo",
+			Inhibit: false,
+		},
+		{
+			Vision:  "bar",
+			Inhibit: false,
+		},
+		{
+			Vision:  "baz",
+			Inhibit: true,
+		},
+	}
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldResemble, []string{"foo", "baz", "foo", "bar"})
 }
 
 func TestImage(t *testing.T) {
@@ -248,10 +320,10 @@ func TestImage(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf:    imagebuffer.ImageBuffer{},
+		buf: imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -295,10 +367,10 @@ func TestImages(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf:    imagebuffer.ImageBuffer{},
+		buf: imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
@@ -323,9 +395,9 @@ func TestProperties(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 
 	properties := camera.Properties{
-		SupportsPCD:    false,
-		ImageType:    	camera.ImageType("color"),
-		MimeTypes:  	[]string{utils.MimeTypeJPEG},
+		SupportsPCD: false,
+		ImageType:   camera.ImageType("color"),
+		MimeTypes:   []string{utils.MimeTypeJPEG},
 	}
 
 	fc := &filteredCamera{
@@ -335,10 +407,10 @@ func TestProperties(t *testing.T) {
 			WindowSeconds:   10,
 		},
 		logger: logger,
-		visionServices: []vision.Service{
+		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf:    imagebuffer.ImageBuffer{},
+		buf: imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			PropertiesFunc: func(ctx context.Context) (camera.Properties, error) {
 				return properties, nil
@@ -351,4 +423,59 @@ func TestProperties(t *testing.T) {
 	res, err := fc.Properties(ctx)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, properties)
+}
+
+func TestDoCommand(t *testing.T) {
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications: map[string]float64{"a": .8},
+			Objects:         map[string]float64{"b": .8},
+			WindowSeconds:   10,
+		},
+		otherVisionServices: []vision.Service{
+			getDummyVisionService(),
+		},
+		buf:    imagebuffer.ImageBuffer{},
+		cam: &inject.Camera{
+			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+				return []camera.NamedImage{
+					{Image: a, SourceName: ""},
+					{Image: b, SourceName: ""},
+					{Image: c, SourceName: ""},
+				}, resource.ResponseMetadata{}, nil
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	res, err := fc.DoCommand(ctx, nil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+
+	acceptedStats := res["accepted"].(map[string]interface{})
+	test.That(t, acceptedStats["total"], test.ShouldEqual, 0)
+	test.That(t, acceptedStats["vision"], test.ShouldBeNil)
+
+	rejectedStats := res["rejected"].(map[string]interface{})
+	test.That(t, rejectedStats["total"], test.ShouldEqual, 0)
+	test.That(t, rejectedStats["vision"], test.ShouldBeNil)
+
+	fc.acceptedStats = imageStats{total: 1, breakdown: map[string]int{"foo": 1}}
+	fc.rejectedStats = imageStats{total: 2, breakdown: map[string]int{"bar": 2}}
+	res, err = fc.DoCommand(ctx, nil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+
+	acceptedStats = res["accepted"].(map[string]interface{})
+	test.That(t, acceptedStats["total"], test.ShouldEqual, 1)
+	visionBreakdown, ok := acceptedStats["vision"].(map[string]int)
+	test.That(t, ok, test.ShouldEqual, true)
+	test.That(t, visionBreakdown, test.ShouldResemble, map[string]int{"foo": 1})
+	
+	rejectedStats = res["rejected"].(map[string]interface{})
+	test.That(t, rejectedStats["total"], test.ShouldEqual, 2)
+	visionBreakdown, ok = rejectedStats["vision"].(map[string]int)
+	test.That(t, ok, test.ShouldEqual, true)
+	test.That(t, visionBreakdown, test.ShouldResemble, map[string]int{"bar": 2})
 }
