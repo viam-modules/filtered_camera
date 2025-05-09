@@ -1,14 +1,36 @@
 
-UNAME := $(shell uname -s)
+GO_BUILD_ENV :=
+GO_BUILD_FLAGS := -tags no_cgo,osusergo,netgo
+MODULE_BINARY := filtered-camera
 
-FLAGS=-tags no_cgo,osusergo,netgo
-
-ifeq ($(UNAME),Linux)
-    FLAGS += -ldflags="-extldflags=-static -s -w"
+ifeq ($(VIAM_TARGET_OS), windows)
+	GO_BUILD_ENV += GOOS=windows GOARCH=amd64
+	MODULE_BINARY = filtered-camera.exe
 endif
 
-filtered-camera: Makefile *.go cmd/module/*.go
-	go build $(FLAGS) -o filtered-camera cmd/module/cmd.go
+ifeq ($(VIAM_TARGET_OS),linux)
+    GO_BUILD_FLAGS += -ldflags="-extldflags=-static -s -w"
+endif
+
+$(MODULE_BINARY): Makefile *.go cmd/module/*.go
+	$(GO_BUILD_ENV) go build $(GO_BUILD_FLAGS) -o $(MODULE_BINARY) cmd/module/cmd.go
+
+module.tar.gz: meta.json $(MODULE_BINARY)
+	tar czf $@ meta.json $(MODULE_BINARY) 
+	git checkout meta.json
+
+ifeq ($(VIAM_TARGET_OS), windows)
+module.tar.gz: fix-meta-for-win
+else
+module.tar.gz: strip-module
+endif
+
+strip-module: 
+	strip filtered-camera
+
+fix-meta-for-win:
+	jq '.entrypoint = "filtered-camera.exe"' meta.json > temp.json && mv temp.json meta.json
+
 
 test:
 	go test
@@ -16,8 +38,6 @@ test:
 lint:
 	golangci-lint run --timeout 10m
 
-module.tar.gz: filtered-camera
-	tar czf module.tar.gz filtered-camera
 
 all: module test
 
