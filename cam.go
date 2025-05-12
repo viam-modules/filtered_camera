@@ -166,12 +166,12 @@ type filteredCamera struct {
 	otherVisionServices []vision.Service
 	allClassifications  map[string]map[string]float64
 	allObjects          map[string]map[string]float64
-	acceptedStats	   imageStats
-	rejectedStats	   imageStats
+	acceptedStats       imageStats
+	rejectedStats       imageStats
 }
 
 type imageStats struct {
-	total 	  int
+	total     int
 	breakdown map[string]int
 	startTime time.Time
 }
@@ -288,7 +288,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	if !IsFromDataMgmt(ctx, extra) {
-		return images, meta, nil
+		return fc.buf.LastCached.Imgs, fc.buf.LastCached.Meta, nil
 	}
 
 	for _, img := range images {
@@ -298,6 +298,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		}
 
 		if shouldSend {
+			fc.buf.CacheImages(images)
 			return images, meta, nil
 		}
 	}
@@ -313,7 +314,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		return x.Imgs, x.Meta, nil
 	}
 
-	return nil, meta, data.ErrNoCaptureToStore
+	return fc.buf.LastCached.Imgs, fc.buf.LastCached.Meta, data.ErrNoCaptureToStore
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
