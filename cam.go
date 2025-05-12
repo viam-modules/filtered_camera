@@ -307,7 +307,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	if !IsFromDataMgmt(ctx, extra) {
-		return fc.buf.LastCached.Imgs, fc.buf.LastCached.Meta, nil
+		return images, meta, nil
 	}
 
 	for _, img := range images {
@@ -317,7 +317,6 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		}
 
 		if shouldSend {
-			fc.buf.CacheImages(images)
 			return images, meta, nil
 		}
 	}
@@ -333,7 +332,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		return x.Imgs, x.Meta, nil
 	}
 
-	return fc.buf.LastCached.Imgs, fc.buf.LastCached.Meta, data.ErrNoCaptureToStore
+	return nil, meta, data.ErrNoCaptureToStore
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
