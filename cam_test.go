@@ -74,8 +74,8 @@ func TestShouldSend(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		allClassifications: map[string]map[string]float64{"": {"a": .8}},
-		allObjects:         map[string]map[string]float64{"": {"b": .8}},
+		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
+		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
 	}
 
 	res, err := fc.shouldSend(context.Background(), d)
@@ -104,8 +104,8 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
-	fc.allClassifications[""] = map[string]float64{"*": .8}
-	fc.allObjects[""] = map[string]float64{"*": .8}
+	fc.acceptedClassifications[""] = map[string]float64{"*": .8}
+	fc.acceptedObjects[""] = map[string]float64{"*": .8}
 
 	res, err = fc.shouldSend(context.Background(), e)
 	test.That(t, err, test.ShouldBeNil)
@@ -116,8 +116,8 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, res, test.ShouldEqual, true)
 
 	// test inhibit should not send with classifications
-	fc.allClassifications = map[string]map[string]float64{"": {"a": .7}}
-	fc.allObjects = map[string]map[string]float64{}
+	fc.inhibitedClassifications = map[string]map[string]float64{"": {"a": .7}}
+	fc.acceptedObjects = map[string]map[string]float64{}
 	fc.inhibitors = []vision.Service{
 		getDummyVisionService(),
 	}
@@ -126,17 +126,28 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, res, test.ShouldEqual, false)
 
 	// test inhibit should not send with objects
-	fc.allClassifications = map[string]map[string]float64{}
-	fc.allObjects = map[string]map[string]float64{"": {"b": .1}}
+	fc.inhibitedClassifications = map[string]map[string]float64{}
+	fc.inhibitedObjects = map[string]map[string]float64{"": {"b": .1}}
 	res, err = fc.shouldSend(context.Background(), b)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
+
+	// test that using same detector for inhibit and accept works properly
+	fc.inhibitedObjects = map[string]map[string]float64{"": {"b": .7}}
+	fc.acceptedObjects = map[string]map[string]float64{"": {"f": .7}}
+
+	res, err = fc.shouldSend(context.Background(), b)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, false)
+	res, err = fc.shouldSend(context.Background(), f)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldEqual, true)
 
 	// test accepted stats update properly and don't affect rejected stats
 	fc.acceptedStats = imageStats{}
 	fc.rejectedStats = imageStats{}
 	fc.inhibitors = []vision.Service{}
-	fc.allClassifications = map[string]map[string]float64{"": {"a": .8}}
+	fc.acceptedClassifications = map[string]map[string]float64{"": {"a": .8}}
 	res, err = fc.shouldSend(context.Background(), a)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
@@ -151,13 +162,13 @@ func TestShouldSend(t *testing.T) {
 	fc.inhibitors = []vision.Service{
 		getDummyVisionService(),
 	}
-	res, err = fc.shouldSend(context.Background(), a)
+	res, err = fc.shouldSend(context.Background(), b)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
-	test.That(t, fc.rejectedStats.breakdown["a"], test.ShouldEqual, 1)
+	test.That(t, fc.rejectedStats.breakdown["b"], test.ShouldEqual, 1)
 	test.That(t, fc.acceptedStats.total, test.ShouldEqual, 0)
-	_, ok = fc.acceptedStats.breakdown["a"]
+	_, ok = fc.acceptedStats.breakdown["b"]
 	test.That(t, ok, test.ShouldEqual, false)
 
 	// test that image that does not match any classification or object is rejected
@@ -333,8 +344,8 @@ func TestImage(t *testing.T) {
 				}, resource.ResponseMetadata{}, nil
 			},
 		},
-		allClassifications: map[string]map[string]float64{"": {"a": .8}},
-		allObjects:         map[string]map[string]float64{"": {"b": .8}},
+		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
+		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
 	}
 
 	ctx := context.Background()
@@ -379,8 +390,8 @@ func TestImages(t *testing.T) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
 			},
 		},
-		allClassifications: map[string]map[string]float64{"": {"a": .8}},
-		allObjects:         map[string]map[string]float64{"": {"b": .8}},
+		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
+		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
 	}
 
 	ctx := context.Background()
@@ -441,7 +452,7 @@ func TestDoCommand(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf:    imagebuffer.ImageBuffer{},
+		buf: imagebuffer.ImageBuffer{},
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -478,7 +489,7 @@ func TestDoCommand(t *testing.T) {
 	visionBreakdown, ok := acceptedStats["vision"].(map[string]int)
 	test.That(t, ok, test.ShouldEqual, true)
 	test.That(t, visionBreakdown, test.ShouldResemble, map[string]int{"foo": 1})
-	
+
 	rejectedStats = res["rejected"].(map[string]interface{})
 	test.That(t, rejectedStats["total"], test.ShouldEqual, 2)
 	visionBreakdown, ok = rejectedStats["vision"].(map[string]int)

@@ -108,16 +108,20 @@ func init() {
 				}
 
 				if newConf.Classifications != nil {
-					fc.allClassifications = make(map[string]map[string]float64)
-					fc.allClassifications[newConf.Vision] = newConf.Classifications
+					fc.acceptedClassifications = make(map[string]map[string]float64)
+					fc.acceptedClassifications[newConf.Vision] = newConf.Classifications
 				}
 				if newConf.Objects != nil {
-					fc.allObjects = make(map[string]map[string]float64)
-					fc.allObjects[newConf.Vision] = newConf.Objects
+					fc.acceptedObjects = make(map[string]map[string]float64)
+					fc.acceptedObjects[newConf.Vision] = newConf.Objects
 				}
 			} else {
 				fc.inhibitors = []vision.Service{}
 				fc.otherVisionServices = []vision.Service{}
+				fc.inhibitedClassifications = make(map[string]map[string]float64)
+				fc.acceptedClassifications = make(map[string]map[string]float64)
+				fc.inhibitedObjects = make(map[string]map[string]float64)
+				fc.acceptedObjects = make(map[string]map[string]float64)
 				for _, vs := range newConf.VisionServices {
 					visionService, err := vision.FromDependencies(deps, vs.Vision)
 					if err != nil {
@@ -126,21 +130,20 @@ func init() {
 
 					if vs.Inhibit {
 						fc.inhibitors = append(fc.inhibitors, visionService)
+						if vs.Classifications != nil {
+							fc.inhibitedClassifications[vs.Vision] = vs.Classifications
+						}
+						if vs.Objects != nil {
+							fc.inhibitedObjects[vs.Vision] = vs.Objects
+						}
 					} else {
 						fc.otherVisionServices = append(fc.otherVisionServices, visionService)
-					}
-
-					if vs.Classifications != nil {
-						if fc.allClassifications == nil {
-							fc.allClassifications = make(map[string]map[string]float64)
+						if vs.Classifications != nil {
+							fc.acceptedClassifications[vs.Vision] = vs.Classifications
 						}
-						fc.allClassifications[vs.Vision] = vs.Classifications
-					}
-					if vs.Objects != nil {
-						if fc.allObjects == nil {
-							fc.allObjects = make(map[string]map[string]float64)
+						if vs.Objects != nil {
+							fc.acceptedObjects[vs.Vision] = vs.Objects
 						}
-						fc.allObjects[vs.Vision] = vs.Objects
 					}
 				}
 			}
@@ -160,14 +163,16 @@ type filteredCamera struct {
 	conf   *Config
 	logger logging.Logger
 
-	cam                 camera.Camera
-	buf                 imagebuffer.ImageBuffer
-	inhibitors          []vision.Service
-	otherVisionServices []vision.Service
-	allClassifications  map[string]map[string]float64
-	allObjects          map[string]map[string]float64
-	acceptedStats       imageStats
-	rejectedStats       imageStats
+	cam                      camera.Camera
+	buf                      imagebuffer.ImageBuffer
+	inhibitors               []vision.Service
+	otherVisionServices      []vision.Service
+	inhibitedClassifications map[string]map[string]float64
+	acceptedClassifications  map[string]map[string]float64
+	inhibitedObjects         map[string]map[string]float64
+	acceptedObjects          map[string]map[string]float64
+	acceptedStats            imageStats
+	rejectedStats            imageStats
 }
 
 type imageStats struct {
@@ -212,22 +217,29 @@ func (fc *filteredCamera) formatStats() map[string]interface{} {
 	return stats
 }
 
-func (fc *filteredCamera) anyClassificationsMatch(visionService string, cs []classification.Classification) (bool, classification.Classification) {
+func (fc *filteredCamera) anyClassificationsMatch(visionService string, cs []classification.Classification, inhibit bool) (bool, classification.Classification) {
 	for _, c := range cs {
-		if fc.classificationMatches(visionService, c) {
+		if fc.classificationMatches(visionService, c, inhibit) {
 			return true, c
 		}
 	}
 	return false, nil
 }
 
-func (fc *filteredCamera) classificationMatches(visionService string, c classification.Classification) bool {
-	min, has := fc.allClassifications[visionService][c.Label()]
+func (fc *filteredCamera) classificationMatches(visionService string, c classification.Classification, inhibit bool) bool {
+	var allClassifications map[string]map[string]float64
+	if inhibit {
+		allClassifications = fc.inhibitedClassifications
+	} else {
+		allClassifications = fc.acceptedClassifications
+	}
+
+	min, has := allClassifications[visionService][c.Label()]
 	if has && c.Score() > min {
 		return true
 	}
 
-	min, has = fc.allClassifications[visionService]["*"]
+	min, has = allClassifications[visionService]["*"]
 	if has && c.Score() > min {
 		return true
 	}
@@ -235,9 +247,9 @@ func (fc *filteredCamera) classificationMatches(visionService string, c classifi
 	return false
 }
 
-func (fc *filteredCamera) anyDetectionsMatch(visionService string, ds []objectdetection.Detection) (bool, objectdetection.Detection) {
+func (fc *filteredCamera) anyDetectionsMatch(visionService string, ds []objectdetection.Detection, inhibit bool) (bool, objectdetection.Detection) {
 	for _, d := range ds {
-		if fc.detectionMatches(visionService, d) {
+		if fc.detectionMatches(visionService, d, inhibit) {
 			return true, d
 		}
 	}
@@ -245,13 +257,20 @@ func (fc *filteredCamera) anyDetectionsMatch(visionService string, ds []objectde
 	return false, nil
 }
 
-func (fc *filteredCamera) detectionMatches(visionService string, d objectdetection.Detection) bool {
-	min, has := fc.allObjects[visionService][d.Label()]
+func (fc *filteredCamera) detectionMatches(visionService string, d objectdetection.Detection, inhibit bool) bool {
+	var allDetections map[string]map[string]float64
+	if inhibit {
+		allDetections = fc.inhibitedObjects
+	} else {
+		allDetections = fc.acceptedObjects
+	}
+
+	min, has := allDetections[visionService][d.Label()]
 	if has && d.Score() > min {
 		return true
 	}
 
-	min, has = fc.allObjects[visionService]["*"]
+	min, has = allDetections[visionService]["*"]
 	if has && d.Score() > min {
 		return true
 	}
@@ -320,13 +339,13 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
-		if len(fc.allClassifications[vs.Name().Name]) > 0 {
+		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				return false, err
 			}
 
-			match, label := fc.anyClassificationsMatch(vs.Name().Name, res)
+			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with classifications %v", res)
 				fc.rejectedStats.update(label.Label())
@@ -334,13 +353,13 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			}
 		}
 
-		if len(fc.allObjects[vs.Name().Name]) > 0 {
+		if len(fc.inhibitedObjects[vs.Name().Name]) > 0 {
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
 				return false, err
 			}
 
-			match, label := fc.anyDetectionsMatch(vs.Name().Name, res)
+			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with objects %v", res)
 				fc.rejectedStats.update(label.Label())
@@ -350,13 +369,13 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 	}
 
 	for _, vs := range fc.otherVisionServices {
-		if len(fc.allClassifications[vs.Name().Name]) > 0 {
+		if len(fc.acceptedClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				return false, err
 			}
 
-			match, label := fc.anyClassificationsMatch(vs.Name().Name, res)
+			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
 				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
@@ -365,13 +384,13 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			}
 		}
 
-		if len(fc.allObjects[vs.Name().Name]) > 0 {
+		if len(fc.acceptedObjects[vs.Name().Name]) > 0 {
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
 				return false, err
 			}
 
-			match, label := fc.anyDetectionsMatch(vs.Name().Name, res)
+			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
 				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
