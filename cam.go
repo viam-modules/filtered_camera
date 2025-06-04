@@ -21,17 +21,7 @@ import (
 
 var Model = Family.WithModel("filtered-camera")
 
-type Config struct {
-	Camera string
-	// Deprecated: use VisionServices instead
-	Vision         string
-	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
-	WindowSeconds  int                   `json:"window_seconds"`
-
-	Classifications map[string]float64
-	Objects         map[string]float64
-}
-
+// We will have one VisionServiceConfig for each vision service the filtered camera connects to
 type VisionServiceConfig struct {
 	Vision          string             `json:"vision"`
 	Objects         map[string]float64 `json:"objects,omitempty"`
@@ -46,6 +36,17 @@ func (config *VisionServiceConfig) Validate(path string) error {
 	}
 
 	return nil
+}
+
+type Config struct {
+	Camera string
+	// Deprecated: use VisionServices instead
+	Vision         string
+	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
+	WindowSeconds  int                   `json:"window_seconds"`
+
+	Classifications map[string]float64
+	Objects         map[string]float64
 }
 
 func (cfg *Config) Validate(path string) ([]string, error) {
