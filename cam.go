@@ -183,25 +183,17 @@ func (is *imageStats) update(visionService string) {
 }
 
 func (fc *filteredCamera) formatStats() map[string]interface{} {
+	acceptedStats := make(map[string]interface{})
+	acceptedStats["total"] = fc.acceptedStats.total
+	acceptedStats["vision"] = fc.acceptedStats.breakdown
+
+	rejectedStats := make(map[string]interface{})
+	rejectedStats["total"] = fc.rejectedStats.total
+	rejectedStats["vision"] = fc.rejectedStats.breakdown
+
 	stats := make(map[string]interface{})
-	stats["accepted"] = make(map[string]interface{})
-	stats["rejected"] = make(map[string]interface{})
-
-	if acceptedStats, ok := stats["accepted"].(map[string]interface{}); !ok {
-		fc.logger.Errorf("failed to get stats")
-		return nil
-	} else {
-		acceptedStats["total"] = fc.acceptedStats.total
-		acceptedStats["vision"] = fc.acceptedStats.breakdown
-	}
-	if rejectedStats, ok := stats["rejected"].(map[string]interface{}); !ok {
-		fc.logger.Errorf("failed to get stats")
-		return nil
-	} else {
-		rejectedStats["total"] = fc.rejectedStats.total
-		rejectedStats["vision"] = fc.rejectedStats.breakdown
-	}
-
+	stats["accepted"] = acceptedStats
+	stats["rejected"] = rejectedStats
 	stats["start_time"] = fc.acceptedStats.startTime.Format(time.RFC1123)
 	return stats
 }
