@@ -178,10 +178,7 @@ func (is *imageStats) update(visionService string) {
 	if is.breakdown == nil {
 		is.breakdown = make(map[string]int)
 	}
-	if _, ok := is.breakdown[visionService]; !ok {
-		is.breakdown[visionService] = 1
-		return
-	}
+	// If the key is not yet in the map, its value defaults to 0.
 	is.breakdown[visionService]++
 }
 
