@@ -281,7 +281,6 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 }
 
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-
 	images, meta, err := fc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
