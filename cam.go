@@ -61,8 +61,6 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	}
 
 	deps := []string{cfg.Camera}
-	inhibitors := []string{}
-	otherVisionServices := []string{}
 
 	if cfg.Vision != "" {
 		logger := logging.NewBlankLogger("deprecated")
@@ -73,16 +71,9 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 			if err := vs.Validate(fmt.Sprintf("%s.%s.%d", path, "vision-service", idx)); err != nil {
 				return nil, err
 			}
-			if vs.Inhibit {
-				inhibitors = append(inhibitors, vs.Vision)
-			} else {
-				otherVisionServices = append(otherVisionServices, vs.Vision)
-			}
+			deps = append(deps, vs.Vision)
 		}
 	}
-
-	deps = append(deps, inhibitors...)
-	deps = append(deps, otherVisionServices...)
 
 	return deps, nil
 }
