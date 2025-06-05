@@ -41,6 +41,9 @@ On the new component panel, copy and paste the following attribute template into
 
 Remove the "classifications" or "objects" section depending on if your ML model is a classifier or detector.
 
+> [!WARNING]
+> The data management service must be configured to use the `ReadImage` method and _not_ the `GetImages` method! As of June 2025, the former can be identified as originating from the data management service, while the latter cannot.
+
 > [!NOTE]
 > For more information, see [Configure a Machine](https://docs.viam.com/operate/get-started/supported-hardware/#configure-hardware-on-your-machine).
 
@@ -132,6 +135,9 @@ On the new component panel, copy and paste the following attribute template into
     "window_seconds": <time_window_for_capture>
 }
 ```
+
+> [!WARNING]
+> The data management service must be configured to use the `ReadImage` method and _not_ the `GetImages` method! As of June 2025, the former can be identified as originating from the data management service, while the latter cannot.
 
 ### Example configurations
 
