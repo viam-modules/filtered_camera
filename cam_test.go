@@ -318,7 +318,7 @@ func TestValidate(t *testing.T) {
 	res, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, res, test.ShouldResemble, []string{"foo", "baz", "foo", "bar"})
+	test.That(t, res, test.ShouldResemble, []string{"foo", "foo", "bar", "baz"})
 }
 
 func TestImage(t *testing.T) {
