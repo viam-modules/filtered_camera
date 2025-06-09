@@ -293,7 +293,7 @@ func TestImage(t *testing.T) {
 					{Image: a, SourceName: ""},
 					{Image: b, SourceName: ""},
 					{Image: c, SourceName: ""},
-				}, resource.ResponseMetadata{}, nil
+				}, resource.ResponseMetadata{CapturedAt: time.Now()}, nil
 			},
 		},
 		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
