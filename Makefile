@@ -12,7 +12,7 @@ ifeq ($(VIAM_TARGET_OS),linux)
     GO_BUILD_FLAGS += -ldflags="-extldflags=-static -s -w"
 endif
 
-$(MODULE_BINARY): Makefile *.go cmd/module/*.go conditional_camera/*.go image_buffer/*.go
+$(MODULE_BINARY): Makefile *.go */*.go cmd/module/*.go
 	$(GO_BUILD_ENV) go build $(GO_BUILD_FLAGS) -o $(MODULE_BINARY) cmd/module/cmd.go
 
 module.tar.gz: meta.json $(MODULE_BINARY)
