@@ -83,7 +83,7 @@ func (ib *ImageBuffer) GetCachedData() *CachedData {
 	if len(ib.ToSend) == 0 {
 		return nil
 	}
-	return_value = ib.ToSend[0]
+	return_value := ib.ToSend[0]
 	ib.ToSend = ib.ToSend[1:]
-	return return_value
+	return &return_value
 }
