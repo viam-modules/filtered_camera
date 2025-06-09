@@ -6,8 +6,6 @@ package conditional_camera
 import (
 	"context"
 
-	"time"
-
 	"github.com/pkg/errors"
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
