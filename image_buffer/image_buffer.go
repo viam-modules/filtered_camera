@@ -35,7 +35,7 @@ func (ib *ImageBuffer) AddToBuffer(imgs []camera.NamedImage, meta resource.Respo
 		return
 	}
 
-	ib.CleanBuffer_inlock(windowSeconds)
+	ib.cleanBuffer(windowSeconds)
 	if ib.captureTill.Before(time.Now()) {
 		ib.recentPast = append(ib.recentPast, CachedData{imgs, meta})
 	} else {
@@ -44,7 +44,7 @@ func (ib *ImageBuffer) AddToBuffer(imgs []camera.NamedImage, meta resource.Respo
 }
 
 // Remove too-old images from RecentPast
-func (ib *ImageBuffer) CleanBuffer_inlock(windowSeconds int) {
+func (ib *ImageBuffer) cleanBuffer(windowSeconds int) {
 	sort.Slice(ib.recentPast, func(i, j int) bool {
 		a := ib.recentPast[i]
 		b := ib.recentPast[j]
@@ -65,7 +65,7 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 	defer ib.mu.Unlock()
 
 	ib.captureTill = time.Now().Add(ib.windowDuration(windowSeconds))
-	ib.CleanBuffer_inlock(windowSeconds)
+	ib.cleanBuffer(windowSeconds)
 
 	ib.toSend = append(ib.toSend, ib.recentPast...)
 
