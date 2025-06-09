@@ -180,54 +180,6 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, fc.rejectedStats.breakdown["no vision services triggered"], test.ShouldEqual, 1)
 }
 
-func TestWindow(t *testing.T) {
-	logger := logging.NewTestLogger(t)
-
-	fc := &filteredCamera{
-		conf: &Config{
-			Classifications: map[string]float64{"a": .8},
-			Objects:         map[string]float64{"b": .8},
-			WindowSeconds:   10,
-		},
-		logger: logger,
-		otherVisionServices: []vision.Service{
-			getDummyVisionService(),
-		},
-	}
-
-	a := time.Now()
-	b := time.Now().Add(-1 * time.Second)
-	c := time.Now().Add(-1 * time.Minute)
-
-	fc.buf.Buffer = []imagebuffer.CachedData{
-		{Meta: resource.ResponseMetadata{CapturedAt: a}},
-		{Meta: resource.ResponseMetadata{CapturedAt: b}},
-		{Meta: resource.ResponseMetadata{CapturedAt: c}},
-	}
-
-	fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
-
-	test.That(t, len(fc.buf.Buffer), test.ShouldEqual, 0)
-	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 2)
-	test.That(t, b, test.ShouldEqual, fc.buf.ToSend[0].Meta.CapturedAt)
-	test.That(t, a, test.ShouldEqual, fc.buf.ToSend[1].Meta.CapturedAt)
-
-	fc.buf.Buffer = []imagebuffer.CachedData{
-		{Meta: resource.ResponseMetadata{CapturedAt: c}},
-		{Meta: resource.ResponseMetadata{CapturedAt: b}},
-		{Meta: resource.ResponseMetadata{CapturedAt: a}},
-	}
-	fc.buf.ToSend = []imagebuffer.CachedData{}
-
-	fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
-
-	test.That(t, len(fc.buf.Buffer), test.ShouldEqual, 0)
-	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 2)
-	test.That(t, b, test.ShouldEqual, fc.buf.ToSend[0].Meta.CapturedAt)
-	test.That(t, a, test.ShouldEqual, fc.buf.ToSend[1].Meta.CapturedAt)
-
-}
-
 func TestValidate(t *testing.T) {
 	conf := &Config{
 		Classifications: map[string]float64{"a": .8},

@@ -312,7 +312,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	for _, img := range images {
-		_, err := fc.shouldSend(ctx, img.Image)
+		shouldSend, err := fc.shouldSend(ctx, img.Image)
 		if err != nil {
 			return nil, meta, err
 		}

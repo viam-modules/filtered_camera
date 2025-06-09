@@ -33,7 +33,7 @@ fix-meta-for-win:
 	jq '.entrypoint = "filtered-camera.exe"' meta.json > temp.json && mv temp.json meta.json
 
 test:
-	go test
+	go test ./...
 
 lint:
 	golangci-lint run --timeout 10m
