@@ -36,10 +36,6 @@ func (ib *ImageBuffer) AddToBuffer(imgs []camera.NamedImage, meta resource.Respo
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
-	if windowSeconds == 0 {
-		return
-	}
-
 	ib.cleanBuffer(windowSeconds)
 	if ib.captureTill.Before(time.Now()) {
 		ib.Logger.Infof("Alan Putting image in recentPast")
@@ -73,12 +69,16 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 	defer ib.mu.Unlock()
 
 	ib.captureTill = time.Now().Add(ib.windowDuration(windowSeconds))
-	ib.cleanBuffer(windowSeconds)
-
-	ib.toSend = append(ib.toSend, ib.recentPast...)
-	ib.Logger.Infof("toSend now has length %s", len(ib.toSend))
-
+	if windowSeconds == 0 && len(ib.recentPast) != 0 {
+		// If windowSeconds is 0, keep the most recent image and throw out everything else.
+		ib.toSend = append(ib.toSend, ib.recentPast[len(ib.recentPast)-1])
+	} else {
+		ib.cleanBuffer(windowSeconds)
+		ib.toSend = append(ib.toSend, ib.recentPast...)
+	}
 	ib.recentPast = []CachedData{}
+
+	ib.Logger.Infof("toSend now has length %d", len(ib.toSend))
 }
 
 // Returns the oldest CachedData we're supposed to send. Returns nil if the buffer is empty.
