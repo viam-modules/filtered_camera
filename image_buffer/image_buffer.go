@@ -61,6 +61,7 @@ func (ib *ImageBuffer) cleanBuffer(windowSeconds int) {
 }
 
 func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
+	fmt.Println("top of MarkShouldSend")
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
@@ -70,18 +71,6 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 	ib.toSend = append(ib.toSend, ib.recentPast...)
 
 	ib.recentPast = []CachedData{}
-}
-
-func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-
-	ib.lastCached = CachedData{
-		Imgs: images,
-		Meta: resource.ResponseMetadata{
-			CapturedAt: time.Now(),
-		},
-	}
 }
 
 // Returns the oldest CachedData we're supposed to send. Returns nil if the buffer is empty.
