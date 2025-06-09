@@ -95,6 +95,7 @@ func init() {
 			}
 
 			fc := &filteredCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
+			fc.buf.Logger = logger
 
 			fc.cam, err = camera.FromDependencies(deps, newConf.Camera)
 			if err != nil {
@@ -386,11 +387,6 @@ func (fc *filteredCamera) markShouldSend(ctx context.Context, img image.Image) e
 				fc.acceptedStats.update(label.Label())
 				return nil
 			}
-		}
-
-		if time.Now().Before(fc.buf.CaptureTill) {
-			// send, but don't update captureTill
-			return nil
 		}
 	}
 

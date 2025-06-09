@@ -139,10 +139,6 @@ func (cc *conditionalCamera) markShouldSend(ctx context.Context) error {
 
 	// TODO: Make this configurable with "result" as default
 	if ans["result"].(bool) {
-		if time.Now().Before(cc.buf.CaptureTill) {
-			// send, but don't update captureTill
-			return nil
-		}
 		cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
 		return nil
 	}

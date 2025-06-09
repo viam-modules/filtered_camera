@@ -7,6 +7,8 @@ import (
 
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/resource"
+
+	"go.viam.com/rdk/logging"
 )
 
 type CachedData struct {
@@ -20,6 +22,8 @@ type ImageBuffer struct {
 	toSend      []CachedData
 	captureTill time.Time
 	lastCached  CachedData
+
+	Logger logging.Logger
 }
 
 func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
@@ -28,6 +32,7 @@ func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
 
 // Remove too-old images from the RecentPast, then add the current image to the appropriate buffer
 func (ib *ImageBuffer) AddToBuffer(imgs []camera.NamedImage, meta resource.ResponseMetadata, windowSeconds int) {
+	ib.Logger.Infof("Alan adding image to buffers...")
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
@@ -37,8 +42,10 @@ func (ib *ImageBuffer) AddToBuffer(imgs []camera.NamedImage, meta resource.Respo
 
 	ib.cleanBuffer(windowSeconds)
 	if ib.captureTill.Before(time.Now()) {
+		ib.Logger.Infof("Alan Putting image in recentPast")
 		ib.recentPast = append(ib.recentPast, CachedData{imgs, meta})
 	} else {
+		ib.Logger.Infof("Alan Putting image in toSend")
 		ib.toSend = append(ib.toSend, CachedData{imgs, meta})
 	}
 }
@@ -61,7 +68,7 @@ func (ib *ImageBuffer) cleanBuffer(windowSeconds int) {
 }
 
 func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
-	fmt.Println("top of MarkShouldSend")
+	ib.Logger.Infof("Alan top of MarkShouldSend")
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
@@ -75,13 +82,16 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 
 // Returns the oldest CachedData we're supposed to send. Returns nil if the buffer is empty.
 func (ib *ImageBuffer) GetCachedData() *CachedData {
+	ib.Logger.Infof("Alan top of GetCachedData")
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
 	if len(ib.toSend) == 0 {
+		ib.Logger.Infof("Alan no data to return from GetCachedData")
 		return nil
 	}
 	return_value := ib.toSend[0]
 	ib.toSend = ib.toSend[1:]
+	ib.Logger.Infof("Alan returning image from GetCachedData!")
 	return &return_value
 }
