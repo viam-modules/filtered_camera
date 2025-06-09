@@ -75,8 +75,8 @@ func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
 	}
 }
 
-// Returns the oldest image we're supposed to send
-func (ib *ImageBuffer) GetCachedImage() *CachedData {
+// Returns the oldest CachedData we're supposed to send. Returns nil if the buffer is empty.
+func (ib *ImageBuffer) GetCachedData() *CachedData {
 	ib.Mu.Lock()
 	defer ib.Mu.Unlock()
 

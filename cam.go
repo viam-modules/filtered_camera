@@ -324,15 +324,15 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	fc.buf.Mu.Lock()
 	defer fc.buf.Mu.Unlock()
 
+	// TODO: figure out what to do with this.
 	fc.buf.AddToBuffer_inlock(images, meta, fc.conf.WindowSeconds)
 
-	if len(fc.buf.ToSend) > 0 {
-		x := fc.buf.ToSend[0]
-		fc.buf.ToSend = fc.buf.ToSend[1:]
-		return x.Imgs, x.Meta, nil
-	}
 
-	return nil, meta, data.ErrNoCaptureToStore
+	x := fc.buf.GetCachedData()
+	if x == nil {
+		return nil, meta, data.ErrNoCaptureToStore
+	}
+	return x.Imgs, x.Meta, nil
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
