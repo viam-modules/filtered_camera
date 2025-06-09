@@ -1,3 +1,6 @@
+// The filtered camera uses a vision service (classifier or detector) to decide whether images are
+// interesting enough to get through the filter, whereas the confitional camera sends a DoCommand
+// to any generic resource, and uses that response to decide whether to let images through.
 package conditional_camera
 
 import (
