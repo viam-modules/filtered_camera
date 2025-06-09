@@ -300,11 +300,15 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 }
 
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-
 	images, meta, err := fc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
 	}
+
+	// TODO: make the mutex private and lock it in AddToBuffer
+	fc.buf.Mu.Lock()
+	fc.buf.AddToBuffer_inlock(images, meta, fc.conf.WindowSeconds)
+	fc.buf.Mu.Unlock()
 
 	if !IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
@@ -315,18 +319,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		if err != nil {
 			return nil, meta, err
 		}
-
-		if shouldSend {
-			return images, meta, nil
-		}
 	}
-
-	fc.buf.Mu.Lock()
-	defer fc.buf.Mu.Unlock()
-
-	// TODO: figure out what to do with this.
-	fc.buf.AddToBuffer_inlock(images, meta, fc.conf.WindowSeconds)
-
 
 	x := fc.buf.GetCachedData()
 	if x == nil {
