@@ -16,7 +16,7 @@ type CachedData struct {
 
 type ImageBuffer struct {
 	Mu          sync.Mutex
-	Buffer      []CachedData
+	RecentPast  []CachedData
 	ToSend      []CachedData
 	CaptureTill time.Time
 	LastCached  CachedData
@@ -32,22 +32,22 @@ func (ib *ImageBuffer) AddToBuffer_inlock(imgs []camera.NamedImage, meta resourc
 	}
 
 	ib.CleanBuffer_inlock(windowSeconds)
-	ib.Buffer = append(ib.Buffer, CachedData{imgs, meta})
+	ib.RecentPast = append(ib.RecentPast, CachedData{imgs, meta})
 }
 
 func (ib *ImageBuffer) CleanBuffer_inlock(windowSeconds int) {
-	sort.Slice(ib.Buffer, func(i, j int) bool {
-		a := ib.Buffer[i]
-		b := ib.Buffer[j]
+	sort.Slice(ib.RecentPast, func(i, j int) bool {
+		a := ib.RecentPast[i]
+		b := ib.RecentPast[j]
 		return a.Meta.CapturedAt.Before(b.Meta.CapturedAt)
 	})
 
 	early := time.Now().Add(-1 * ib.windowDuration(windowSeconds))
-	for len(ib.Buffer) > 0 {
-		if ib.Buffer[0].Meta.CapturedAt.After(early) {
+	for len(ib.RecentPast) > 0 {
+		if ib.RecentPast[0].Meta.CapturedAt.After(early) {
 			return
 		}
-		ib.Buffer = ib.Buffer[1:]
+		ib.RecentPast = ib.RecentPast[1:]
 	}
 }
 
@@ -58,9 +58,9 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 	ib.CaptureTill = time.Now().Add(ib.windowDuration(windowSeconds))
 	ib.CleanBuffer_inlock(windowSeconds)
 
-	ib.ToSend = append(ib.ToSend, ib.Buffer...)
+	ib.ToSend = append(ib.ToSend, ib.RecentPast...)
 
-	ib.Buffer = []CachedData{}
+	ib.RecentPast = []CachedData{}
 }
 
 func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
