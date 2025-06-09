@@ -53,19 +53,19 @@ func init() {
 				return nil, err
 			}
 
-			fc := &conditionalCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
+			cc := &conditionalCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
 
-			fc.cam, err = camera.FromDependencies(deps, newConf.Camera)
+			cc.cam, err = camera.FromDependencies(deps, newConf.Camera)
 			if err != nil {
 				return nil, err
 			}
 
-			fc.filtSvc, err = resource.FromDependencies[resource.Resource](deps, generic.Named(newConf.FilterSvc))
+			cc.filtSvc, err = resource.FromDependencies[resource.Resource](deps, generic.Named(newConf.FilterSvc))
 			if err != nil {
 				return nil, err
 			}
 
-			return fc, nil
+			return cc, nil
 		},
 	})
 }
