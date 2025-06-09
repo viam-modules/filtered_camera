@@ -115,9 +115,12 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	}
 
 	for range images {
-		err := cc.markShouldSend(ctx)
+		shouldSend, err := cc.shouldSend(ctx)
 		if err != nil {
 			return nil, meta, err
+		}
+		if shouldSend {
+			cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
 		}
 	}
 
@@ -128,20 +131,12 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	return x.Imgs, x.Meta, nil
 }
 
-func (cc *conditionalCamera) markShouldSend(ctx context.Context) error {
-
+func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
 	ans, err := cc.filtSvc.DoCommand(ctx, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
-
-	// TODO: Make this configurable with "result" as default
-	if ans["result"].(bool) {
-		cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
-		return nil
-	}
-
-	return nil
+	return ans["result"].(bool), nil
 }
 
 func (cc *conditionalCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
