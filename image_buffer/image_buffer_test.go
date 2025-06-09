@@ -1,7 +1,6 @@
 package imagebuffer
 
 import (
-	"image"
 	"testing"
 	"time"
 
@@ -11,21 +10,13 @@ import (
 )
 
 var (
-	a = image.NewGray(image.Rect(1, 1, 1, 1))
-	b = image.NewGray(image.Rect(2, 1, 1, 1))
-	c = image.NewGray(image.Rect(3, 1, 1, 1))
-	d = image.NewGray(image.Rect(4, 1, 1, 1))
-	e = image.NewGray(image.Rect(5, 1, 1, 1))
-	f = image.NewGray(image.Rect(6, 1, 1, 1))
+	a = time.Now()
+	b = time.Now().Add(-1 * time.Second)
+	c = time.Now().Add(-1 * time.Minute)
 )
 
-func TestWindow(t *testing.T) {
+func TestUnsortedWindow(t *testing.T) {
 	buf := ImageBuffer{}
-
-	a := time.Now()
-	b := time.Now().Add(-1 * time.Second)
-	c := time.Now().Add(-1 * time.Minute)
-
 	buf.recentPast = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
@@ -38,7 +29,10 @@ func TestWindow(t *testing.T) {
 	test.That(t, len(buf.toSend), test.ShouldEqual, 2)
 	test.That(t, b, test.ShouldEqual, buf.toSend[0].Meta.CapturedAt)
 	test.That(t, a, test.ShouldEqual, buf.toSend[1].Meta.CapturedAt)
+}
 
+func TestSortedWindow(t *testing.T) {
+	buf := ImageBuffer{}
 	buf.recentPast = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
@@ -52,5 +46,4 @@ func TestWindow(t *testing.T) {
 	test.That(t, len(buf.toSend), test.ShouldEqual, 2)
 	test.That(t, b, test.ShouldEqual, buf.toSend[0].Meta.CapturedAt)
 	test.That(t, a, test.ShouldEqual, buf.toSend[1].Meta.CapturedAt)
-
 }
