@@ -19,7 +19,6 @@ type ImageBuffer struct {
 	recentPast  []CachedData
 	toSend      []CachedData
 	captureTill time.Time
-	lastCached  CachedData
 }
 
 func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
