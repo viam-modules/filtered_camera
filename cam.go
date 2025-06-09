@@ -95,7 +95,6 @@ func init() {
 			}
 
 			fc := &filteredCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
-			fc.buf.Logger = logger
 
 			fc.cam, err = camera.FromDependencies(deps, newConf.Camera)
 			if err != nil {
@@ -301,17 +300,14 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 }
 
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	fc.logger.Infof("Alan at top of images")
 	images, meta, err := fc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
 	}
 
 	if IsFromDataMgmt(ctx, extra) {
-		fc.logger.Infof("Alan adding image to buffer")
 		fc.buf.AddToBuffer(images, meta, fc.conf.WindowSeconds)
 	} else {
-		fc.logger.Infof("Alan returning raw image")
 		return images, meta, nil
 	}
 
