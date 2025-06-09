@@ -105,7 +105,6 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 }
 
 func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-
 	images, meta, err := cc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
@@ -113,51 +112,45 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 
 	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
+	} else {
+		// TODO: make the mutex private and lock it in AddToBuffer
+		cc.buf.Mu.Lock()
+		cc.buf.AddToBuffer_inlock(images, meta, cc.conf.WindowSeconds)
+		cc.buf.Mu.Unlock()
 	}
 
 	for range images {
-		shouldSend, err := cc.shouldSend(ctx)
+		err := cc.markShouldSend(ctx)
 		if err != nil {
 			return nil, meta, err
 		}
-
-		if shouldSend {
-			return images, meta, nil
-		}
 	}
 
-	cc.buf.Mu.Lock()
-	defer cc.buf.Mu.Unlock()
-
-	cc.buf.AddToBuffer_inlock(images, meta, cc.conf.WindowSeconds)
-
-	if len(cc.buf.ToSend) > 0 {
-		x := cc.buf.ToSend[0]
-		cc.buf.ToSend = cc.buf.ToSend[1:]
-		return x.Imgs, x.Meta, nil
+	x := cc.buf.GetCachedData()
+	if x == nil {
+		return nil, meta, data.ErrNoCaptureToStore
 	}
-
-	return nil, meta, data.ErrNoCaptureToStore
+	return x.Imgs, x.Meta, nil
 }
 
-func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
+func (cc *conditionalCamera) markShouldSend(ctx context.Context) error {
 
 	ans, err := cc.filtSvc.DoCommand(ctx, nil)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	// TODO: Make this configurable with "result" as default
 	if ans["result"].(bool) {
 		if time.Now().Before(cc.buf.CaptureTill) {
 			// send, but don't update captureTill
-			return true, nil
+			return nil
 		}
 		cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
-		return true, nil
+		return nil
 	}
 
-	return false, nil
+	return nil
 }
 
 func (cc *conditionalCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
