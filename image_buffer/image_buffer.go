@@ -33,7 +33,7 @@ func (ib *ImageBuffer) AddToBuffer_inlock(imgs []camera.NamedImage, meta resourc
 	}
 
 	ib.CleanBuffer_inlock(windowSeconds)
-	if ib.CaptureTill < time.Now() {
+	if ib.CaptureTill.Before(time.Now()) {
 		ib.RecentPast = append(ib.RecentPast, CachedData{imgs, meta})
 	} else {
 		ib.ToSend = append(ib.ToSend, CachedData{imgs, meta})
