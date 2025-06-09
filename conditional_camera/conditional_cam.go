@@ -113,10 +113,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	} else {
-		// TODO: make the mutex private and lock it in AddToBuffer
-		cc.buf.Mu.Lock()
-		cc.buf.AddToBuffer_inlock(images, meta, cc.conf.WindowSeconds)
-		cc.buf.Mu.Unlock()
+		cc.buf.AddToBuffer(images, meta, cc.conf.WindowSeconds)
 	}
 
 	for range images {

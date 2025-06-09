@@ -15,7 +15,7 @@ type CachedData struct {
 }
 
 type ImageBuffer struct {
-	Mu          sync.Mutex
+	mu          sync.Mutex
 	RecentPast  []CachedData
 	ToSend      []CachedData
 	CaptureTill time.Time
@@ -27,7 +27,10 @@ func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
 }
 
 // Remove too-old images from the RecentPast, then add the current image to the appropriate buffer
-func (ib *ImageBuffer) AddToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata, windowSeconds int) {
+func (ib *ImageBuffer) AddToBuffer(imgs []camera.NamedImage, meta resource.ResponseMetadata, windowSeconds int) {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+
 	if windowSeconds == 0 {
 		return
 	}
@@ -58,8 +61,8 @@ func (ib *ImageBuffer) CleanBuffer_inlock(windowSeconds int) {
 }
 
 func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
-	ib.Mu.Lock()
-	defer ib.Mu.Unlock()
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
 
 	ib.CaptureTill = time.Now().Add(ib.windowDuration(windowSeconds))
 	ib.CleanBuffer_inlock(windowSeconds)
@@ -70,8 +73,8 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 }
 
 func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
-	ib.Mu.Lock()
-	defer ib.Mu.Unlock()
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
 
 	ib.LastCached = CachedData{
 		Imgs: images,
@@ -83,8 +86,8 @@ func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
 
 // Returns the oldest CachedData we're supposed to send. Returns nil if the buffer is empty.
 func (ib *ImageBuffer) GetCachedData() *CachedData {
-	ib.Mu.Lock()
-	defer ib.Mu.Unlock()
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
 
 	if len(ib.ToSend) == 0 {
 		return nil
