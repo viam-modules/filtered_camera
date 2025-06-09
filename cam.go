@@ -312,9 +312,12 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	for _, img := range images {
-		err := fc.markShouldSend(ctx, img.Image)
+		_, err := fc.shouldSend(ctx, img.Image)
 		if err != nil {
 			return nil, meta, err
+		}
+		if shouldSend {
+			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 		}
 	}
 
@@ -325,34 +328,35 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	return x.Imgs, x.Meta, nil
 }
 
-func (fc *filteredCamera) markShouldSend(ctx context.Context, img image.Image) error {
+// We return whether the classifiers/detectors think this image is interesting
+func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
-				return err
+				return false, err
 			}
 
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with classifications %v", res)
 				fc.rejectedStats.update(label.Label())
-				return nil
+				return false, nil
 			}
 		}
 
 		if len(fc.inhibitedObjects[vs.Name().Name]) > 0 {
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
-				return err
+				return false, err
 			}
 
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with objects %v", res)
 				fc.rejectedStats.update(label.Label())
-				return nil
+				return false, nil
 			}
 		}
 	}
@@ -361,36 +365,34 @@ func (fc *filteredCamera) markShouldSend(ctx context.Context, img image.Image) e
 		if len(fc.acceptedClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
-				return err
+				return false, err
 			}
 
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
-				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 				fc.acceptedStats.update(label.Label())
-				return nil
+				return true, nil
 			}
 		}
 
 		if len(fc.acceptedObjects[vs.Name().Name]) > 0 {
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
-				return err
+				return false, err
 			}
 
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
-				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 				fc.acceptedStats.update(label.Label())
-				return nil
+				return true, nil
 			}
 		}
 	}
 
 	fc.rejectedStats.update("no vision services triggered")
-	return nil
+	return false, nil
 }
 
 func (fc *filteredCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
