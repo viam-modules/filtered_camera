@@ -306,10 +306,10 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		return images, meta, err
 	}
 
-	if !IsFromDataMgmt(ctx, extra) {
-		return images, meta, nil
-	} else {
+	if IsFromDataMgmt(ctx, extra) {
 		fc.buf.AddToBuffer(images, meta, fc.conf.WindowSeconds)
+	} else {
+		return images, meta, nil
 	}
 
 	for _, img := range images {

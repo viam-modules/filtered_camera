@@ -108,10 +108,10 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		return images, meta, err
 	}
 
-	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
-		return images, meta, nil
-	} else {
+	if filtered_camera.IsFromDataMgmt(ctx, extra) {
 		cc.buf.AddToBuffer(images, meta, cc.conf.WindowSeconds)
+	} else {
+		return images, meta, nil
 	}
 
 	for range images {

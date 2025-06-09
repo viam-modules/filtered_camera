@@ -76,6 +76,7 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 	ib.cleanBuffer(windowSeconds)
 
 	ib.toSend = append(ib.toSend, ib.recentPast...)
+	ib.Logger.Infof("toSend now has length %s", len(ib.toSend))
 
 	ib.recentPast = []CachedData{}
 }
