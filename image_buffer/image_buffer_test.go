@@ -17,7 +17,7 @@ var (
 
 func TestUnsortedWindow(t *testing.T) {
 	buf := ImageBuffer{}
-	buf.recentPast = []CachedData{
+	buf.recentImages = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
@@ -25,7 +25,7 @@ func TestUnsortedWindow(t *testing.T) {
 
 	buf.MarkShouldSend(10)
 
-	test.That(t, len(buf.recentPast), test.ShouldEqual, 0)
+	test.That(t, len(buf.recentImages), test.ShouldEqual, 0)
 	test.That(t, len(buf.toSend), test.ShouldEqual, 2)
 	test.That(t, b, test.ShouldEqual, buf.toSend[0].Meta.CapturedAt)
 	test.That(t, a, test.ShouldEqual, buf.toSend[1].Meta.CapturedAt)
@@ -33,7 +33,7 @@ func TestUnsortedWindow(t *testing.T) {
 
 func TestSortedWindow(t *testing.T) {
 	buf := ImageBuffer{}
-	buf.recentPast = []CachedData{
+	buf.recentImages = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
@@ -42,7 +42,7 @@ func TestSortedWindow(t *testing.T) {
 
 	buf.MarkShouldSend(10)
 
-	test.That(t, len(buf.recentPast), test.ShouldEqual, 0)
+	test.That(t, len(buf.recentImages), test.ShouldEqual, 0)
 	test.That(t, len(buf.toSend), test.ShouldEqual, 2)
 	test.That(t, b, test.ShouldEqual, buf.toSend[0].Meta.CapturedAt)
 	test.That(t, a, test.ShouldEqual, buf.toSend[1].Meta.CapturedAt)
