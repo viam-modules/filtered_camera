@@ -12,7 +12,7 @@ ifeq ($(VIAM_TARGET_OS),linux)
     GO_BUILD_FLAGS += -ldflags="-extldflags=-static -s -w"
 endif
 
-$(MODULE_BINARY): Makefile *.go cmd/module/*.go
+$(MODULE_BINARY): Makefile *.go */*.go cmd/module/*.go
 	$(GO_BUILD_ENV) go build $(GO_BUILD_FLAGS) -o $(MODULE_BINARY) cmd/module/cmd.go
 
 module.tar.gz: meta.json $(MODULE_BINARY)
@@ -33,7 +33,7 @@ fix-meta-for-win:
 	jq '.entrypoint = "filtered-camera.exe"' meta.json > temp.json && mv temp.json meta.json
 
 test:
-	go test
+	go test ./...
 
 lint:
 	golangci-lint run --timeout 10m

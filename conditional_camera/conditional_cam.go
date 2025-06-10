@@ -1,9 +1,10 @@
+// The filtered camera uses a vision service (classifier or detector) to decide whether images are
+// interesting enough to get through the filter, whereas the conditional camera sends a DoCommand
+// to any generic resource, and uses that response to decide whether to let images through.
 package conditional_camera
 
 import (
 	"context"
-
-	"time"
 
 	"github.com/pkg/errors"
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
@@ -50,19 +51,19 @@ func init() {
 				return nil, err
 			}
 
-			fc := &conditionalCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
+			cc := &conditionalCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
 
-			fc.cam, err = camera.FromDependencies(deps, newConf.Camera)
+			cc.cam, err = camera.FromDependencies(deps, newConf.Camera)
 			if err != nil {
 				return nil, err
 			}
 
-			fc.filtSvc, err = resource.FromDependencies[resource.Resource](deps, generic.Named(newConf.FilterSvc))
+			cc.filtSvc, err = resource.FromDependencies[resource.Resource](deps, generic.Named(newConf.FilterSvc))
 			if err != nil {
 				return nil, err
 			}
 
-			return fc, nil
+			return cc, nil
 		},
 	})
 }
@@ -102,13 +103,14 @@ func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, r
 }
 
 func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-
 	images, meta, err := cc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
 	}
 
-	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
+	if filtered_camera.IsFromDataMgmt(ctx, extra) {
+		cc.buf.AddToBuffer(images, meta, cc.conf.WindowSeconds)
+	} else {
 		return images, meta, nil
 	}
 
@@ -117,44 +119,24 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		if err != nil {
 			return nil, meta, err
 		}
-
 		if shouldSend {
-			return images, meta, nil
+			cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
 		}
 	}
 
-	cc.buf.Mu.Lock()
-	defer cc.buf.Mu.Unlock()
-
-	cc.buf.AddToBuffer_inlock(images, meta, cc.conf.WindowSeconds)
-
-	if len(cc.buf.ToSend) > 0 {
-		x := cc.buf.ToSend[0]
-		cc.buf.ToSend = cc.buf.ToSend[1:]
-		return x.Imgs, x.Meta, nil
+	x := cc.buf.GetCachedData()
+	if x == nil {
+		return nil, meta, data.ErrNoCaptureToStore
 	}
-
-	return nil, meta, data.ErrNoCaptureToStore
+	return x.Imgs, x.Meta, nil
 }
 
 func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
-
 	ans, err := cc.filtSvc.DoCommand(ctx, nil)
 	if err != nil {
 		return false, err
 	}
-
-	// TODO: Make this configurable with "result" as default
-	if ans["result"].(bool) {
-		if time.Now().Before(cc.buf.CaptureTill) {
-			// send, but don't update captureTill
-			return true, nil
-		}
-		cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
-		return true, nil
-	}
-
-	return false, nil
+	return ans["result"].(bool), nil
 }
 
 func (cc *conditionalCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {

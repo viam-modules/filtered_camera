@@ -300,13 +300,14 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 }
 
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-
 	images, meta, err := fc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
 	}
 
-	if !IsFromDataMgmt(ctx, extra) {
+	if IsFromDataMgmt(ctx, extra) {
+		fc.buf.AddToBuffer(images, meta, fc.conf.WindowSeconds)
+	} else {
 		return images, meta, nil
 	}
 
@@ -315,26 +316,19 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		if err != nil {
 			return nil, meta, err
 		}
-
 		if shouldSend {
-			return images, meta, nil
+			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 		}
 	}
 
-	fc.buf.Mu.Lock()
-	defer fc.buf.Mu.Unlock()
-
-	fc.buf.AddToBuffer_inlock(images, meta, fc.conf.WindowSeconds)
-
-	if len(fc.buf.ToSend) > 0 {
-		x := fc.buf.ToSend[0]
-		fc.buf.ToSend = fc.buf.ToSend[1:]
-		return x.Imgs, x.Meta, nil
+	x := fc.buf.GetCachedData()
+	if x == nil {
+		return nil, meta, data.ErrNoCaptureToStore
 	}
-
-	return nil, meta, data.ErrNoCaptureToStore
+	return x.Imgs, x.Meta, nil
 }
 
+// We return whether the classifiers/detectors think this image is interesting
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
@@ -377,7 +371,6 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
-				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
@@ -392,15 +385,9 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
-				fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
 				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
-		}
-
-		if time.Now().Before(fc.buf.CaptureTill) {
-			// send, but don't update captureTill
-			return true, nil
 		}
 	}
 
