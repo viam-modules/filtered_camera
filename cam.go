@@ -330,11 +330,13 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 
 // We return whether the classifiers/detectors think this image is interesting
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
+	fc.logger.Debugf("started shouldSend")
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
+				fc.logger.Debugf("error getting inhibited classifications")
 				return false, err
 			}
 
@@ -349,6 +351,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 		if len(fc.inhibitedObjects[vs.Name().Name]) > 0 {
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
+				fc.logger.Debugf("error getting inhibited detections")
 				return false, err
 			}
 
@@ -365,6 +368,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 		if len(fc.acceptedClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
+				fc.logger.Debugf("error getting non-inhibited classifications")
 				return false, err
 			}
 
@@ -379,6 +383,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 		if len(fc.acceptedObjects[vs.Name().Name]) > 0 {
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
+				fc.logger.Debugf("error getting non-inhibited detections")
 				return false, err
 			}
 
@@ -391,7 +396,13 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 		}
 	}
 
+	if len(fc.otherVisionServices) == 0 {
+		fc.acceptedStats.update("no vision services triggered")
+		fc.logger.Debugf("defaulting to true")
+		return true, nil
+	}
 	fc.rejectedStats.update("no vision services triggered")
+	fc.logger.Debugf("defaulting to false")
 	return false, nil
 }
 
