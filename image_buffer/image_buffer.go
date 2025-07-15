@@ -15,10 +15,12 @@ type CachedData struct {
 }
 
 type ImageBuffer struct {
-	mu           sync.Mutex
-	recentImages []CachedData  // Upload these if something interesting happens in the near future
-	toSend       []CachedData  // Upload these no matter what
-	captureTill  time.Time
+	Mu          sync.Mutex
+	Buffer      []CachedData
+	RingBuffer  []CachedData
+	ToSend      []CachedData
+	CaptureTill time.Time
+	LastCached  CachedData
 }
 
 func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
@@ -59,14 +61,65 @@ func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
-	ib.captureTill = time.Now().Add(ib.windowDuration(windowSeconds))
-	if windowSeconds == 0 && len(ib.recentImages) != 0 {
-		// If windowSeconds is 0, keep the most recent image (the one that triggered this function
-		// call, which we should send) and throw out everything else.
-		ib.toSend = append(ib.toSend, ib.recentImages[len(ib.recentImages)-1])
-	} else {
-		ib.cleanBuffer(windowSeconds)
-		ib.toSend = append(ib.toSend, ib.recentImages...)
+	ib.CaptureTill = time.Now().Add(ib.windowDuration(windowSeconds))
+	
+	// Send images from the ring buffer and continue collecting for windowSeconds
+	triggerTime := time.Now()
+	var imagesToSend []CachedData
+	
+	// Add images from the ring buffer that are within the window
+	for _, cached := range ib.RingBuffer {
+		timeDiff := triggerTime.Sub(cached.Meta.CapturedAt)
+		if timeDiff >= 0 && timeDiff <= ib.windowDuration(windowSeconds) {
+			imagesToSend = append(imagesToSend, cached)
+		}
+	}
+	
+	// Add the images to send
+	ib.ToSend = append(ib.ToSend, imagesToSend...)
+}
+
+func (ib *ImageBuffer) AddToRingBuffer(imgs []camera.NamedImage, meta resource.ResponseMetadata, windowSeconds int, imageFrequency float64) {
+	ib.Mu.Lock()
+	defer ib.Mu.Unlock()
+
+	ib.RingBuffer = append(ib.RingBuffer, CachedData{imgs, meta})
+
+	// Calculate the maximum number of images to keep in the ring buffer
+	// Keep images for 2 * windowSeconds (before and after trigger)
+	maxImages := int(2 * float64(windowSeconds) * imageFrequency)
+	
+	// Remove oldest images if we exceed the max
+	if len(ib.RingBuffer) > maxImages {
+		ib.RingBuffer = ib.RingBuffer[len(ib.RingBuffer)-maxImages:]
+	}
+}
+
+func (ib *ImageBuffer) GetPostTriggerImages(windowSeconds int) []CachedData {
+	ib.Mu.Lock()
+	defer ib.Mu.Unlock()
+
+	var postTriggerImages []CachedData
+	cutoffTime := time.Now().Add(-ib.windowDuration(windowSeconds))
+	
+	for _, cached := range ib.RingBuffer {
+		if cached.Meta.CapturedAt.After(cutoffTime) {
+			postTriggerImages = append(postTriggerImages, cached)
+		}
+	}
+	
+	return postTriggerImages
+}
+
+func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
+	ib.Mu.Lock()
+	defer ib.Mu.Unlock()
+
+	ib.LastCached = CachedData{
+		Imgs: images,
+		Meta: resource.ResponseMetadata{
+			CapturedAt: time.Now(),
+		},
 	}
 	ib.recentImages = []CachedData{}
 }

@@ -27,6 +27,7 @@ type Config struct {
 	Vision         string
 	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
 	WindowSeconds  int                   `json:"window_seconds"`
+	ImageFrequency float64               `json:"image_frequency"`
 
 	Classifications map[string]float64
 	Objects         map[string]float64
@@ -57,6 +58,10 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 		return nil, utils.NewConfigValidationFieldRequiredError(path, "vision_services")
 	} else if cfg.Vision != "" && cfg.VisionServices != nil {
 		return nil, utils.NewConfigValidationError(path, errors.New("cannot specify both vision and vision_services"))
+	}
+
+	if cfg.ImageFrequency <= 0 {
+		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency must be greater than 0"))
 	}
 
 	deps := []string{cfg.Camera}
@@ -150,6 +155,14 @@ func init() {
 			fc.acceptedStats.startTime = time.Now()
 			fc.rejectedStats.startTime = time.Now()
 
+			// Initialize background image capture worker
+			fc.backgroundWorkers = utils.NewStoppableWorkerWithTicker(
+				time.Duration(1000.0/newConf.ImageFrequency)*time.Millisecond,
+				func(ctx context.Context) {
+					fc.captureImageInBackground(ctx)
+				},
+			)
+
 			return fc, nil
 		},
 	})
@@ -157,7 +170,6 @@ func init() {
 
 type filteredCamera struct {
 	resource.AlwaysRebuild
-	resource.TriviallyCloseable
 
 	name   resource.Name
 	conf   *Config
@@ -165,6 +177,7 @@ type filteredCamera struct {
 
 	cam                      camera.Camera
 	buf                      imagebuffer.ImageBuffer
+	backgroundWorkers        *utils.StoppableWorkers
 	inhibitors               []vision.Service
 	otherVisionServices      []vision.Service
 	inhibitedClassifications map[string]map[string]float64
@@ -282,6 +295,23 @@ func (fc *filteredCamera) Name() resource.Name {
 	return fc.name
 }
 
+func (fc *filteredCamera) Close(ctx context.Context) error {
+	if fc.backgroundWorkers != nil {
+		fc.backgroundWorkers.Stop()
+	}
+	return nil
+}
+
+func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
+	images, meta, err := fc.cam.Images(ctx)
+	if err != nil {
+		fc.logger.Debugf("Error capturing image in background: %v", err)
+		return
+	}
+
+	fc.buf.AddToRingBuffer(images, meta, fc.conf.WindowSeconds, fc.conf.ImageFrequency)
+}
+
 func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	return fc.formatStats(), nil
 }
@@ -317,13 +347,41 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			return nil, meta, err
 		}
 		if shouldSend {
-			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
+			fc.buf.CacheImages(images)
+			// Return the cached images from the ring buffer
+			fc.buf.Mu.Lock()
+			defer fc.buf.Mu.Unlock()
+			
+			if len(fc.buf.ToSend) > 0 {
+				x := fc.buf.ToSend[0]
+				fc.buf.ToSend = fc.buf.ToSend[1:]
+				return x.Imgs, x.Meta, nil
+			}
+			
+			return images, meta, nil
 		}
 	}
 
-	x := fc.buf.GetCachedData()
-	if x == nil {
-		return nil, meta, data.ErrNoCaptureToStore
+	// Check if we should send images from the ongoing capture window
+	if time.Now().Before(fc.buf.CaptureTill) {
+		// Get post-trigger images from the ring buffer
+		postTriggerImages := fc.buf.GetPostTriggerImages(fc.conf.WindowSeconds)
+		if len(postTriggerImages) > 0 {
+			// Return the most recent image from the ring buffer
+			latest := postTriggerImages[len(postTriggerImages)-1]
+			return latest.Imgs, latest.Meta, nil
+		}
+	}
+
+	fc.buf.Mu.Lock()
+	defer fc.buf.Mu.Unlock()
+
+	fc.buf.AddToBuffer_inlock(images, meta, fc.conf.WindowSeconds)
+
+	if len(fc.buf.ToSend) > 0 {
+		x := fc.buf.ToSend[0]
+		fc.buf.ToSend = fc.buf.ToSend[1:]
+		return x.Imgs, x.Meta, nil
 	}
 	return x.Imgs, x.Meta, nil
 }

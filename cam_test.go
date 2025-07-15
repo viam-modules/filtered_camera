@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
@@ -17,6 +16,8 @@ import (
 	"go.viam.com/rdk/utils"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
+
+	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 
 	"go.viam.com/test"
 )
@@ -185,6 +186,7 @@ func TestValidate(t *testing.T) {
 		Classifications: map[string]float64{"a": .8},
 		Objects:         map[string]float64{"b": .8},
 		WindowSeconds:   10,
+		ImageFrequency:  1.0,
 	}
 
 	res, err := conf.Validate(".")
