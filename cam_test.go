@@ -662,3 +662,87 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 		test.That(t, fc.buf.ToSend[i].Meta.CapturedAt, test.ShouldEqual, expected)
 	}
 }
+
+func TestMultipleTriggerWindows(t *testing.T) {
+	// This test verifies that the ring buffer correctly captures images within trigger windows
+	// and keeps extending the trigger window if MarkShouldSend keeps being called
+	// It simulates image capture at 1 Hz with 2-second windows around triggers
+	// The ring buffer maintains only the most recent 4 images (2 * windowSeconds * imageFrequency)
+
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	//create a camera that returns images one after another the other simulated to be 1 second
+	// after each other
+	imagesCam := inject.NewCamera("test_camera")
+	timeCount := 0 // inital time
+	imagesCam.ImagesFunc = func(ctx context.Context) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		timeCount++
+		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
+		return []camera.NamedImage{}, // Empty images slice for test
+			resource.ResponseMetadata{
+				CapturedAt: imageTime,
+			},
+			nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications: map[string]float64{"a": .8},
+			Objects:         map[string]float64{"b": .8},
+			WindowSeconds:   2,
+			ImageFrequency:  1.0, // 1 Hz
+		},
+		logger: logger,
+		cam:    imagesCam,
+		otherVisionServices: []vision.Service{
+			getDummyVisionService(),
+		},
+	}
+
+	// Note: The ring buffer will limit itself to 2 * windowSeconds * imageFrequency = 4 images
+	// This test works within that constraint to verify proper trigger window behavior
+
+	// Use a base time that's close to current time to make windows work
+	// Initialize the image buffer
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency)
+
+	// First, add images at times 1, 2, 3, 4, 5
+	for i := 1; i <= 5; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	// Manually trigger at time 5
+	triggerTime1 := baseTime.Add(5 * time.Second)
+	fc.buf.MarkShouldSend(triggerTime1)
+	// Now add images 6-15, with additional triggers at 7 and 9
+	fc.captureImageInBackground(ctx) // 6
+	fc.captureImageInBackground(ctx) // 7
+	triggerTime2 := baseTime.Add(7 * time.Second)
+	fc.buf.MarkShouldSend(triggerTime2)
+	fc.captureImageInBackground(ctx) // 8
+	fc.captureImageInBackground(ctx) // 9
+	triggerTime3 := baseTime.Add(9 * time.Second)
+	fc.buf.MarkShouldSend(triggerTime3)
+	for i := 10; i <= 15; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	// so ToSend should capture [3, 11] and make no repeats
+	expectedTrigger := []time.Time{
+		baseTime.Add(3 * time.Second),
+		baseTime.Add(4 * time.Second),
+		baseTime.Add(5 * time.Second),
+		baseTime.Add(6 * time.Second),
+		baseTime.Add(7 * time.Second),
+		baseTime.Add(8 * time.Second),
+		baseTime.Add(9 * time.Second),
+		baseTime.Add(10 * time.Second),
+		baseTime.Add(11 * time.Second),
+	}
+
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 9)
+	for i, expected := range expectedTrigger {
+		test.That(t, fc.buf.ToSend[i].Meta.CapturedAt, test.ShouldEqual, expected)
+	}
+}

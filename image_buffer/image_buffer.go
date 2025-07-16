@@ -60,7 +60,6 @@ func (ib *ImageBuffer) CleanBuffer_inlock() {
 		if ib.Buffer[0].Meta.CapturedAt.After(early) {
 			return
 		}
-		ib.recentImages = ib.recentImages[1:]
 	}
 }
 
@@ -114,18 +113,4 @@ func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
 			CapturedAt: time.Now(),
 		},
 	}
-	ib.recentImages = []CachedData{}
-}
-
-// Returns the oldest CachedData we're supposed to send. Returns nil if the buffer is empty.
-func (ib *ImageBuffer) GetCachedData() *CachedData {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-
-	if len(ib.toSend) == 0 {
-		return nil
-	}
-	return_value := ib.toSend[0]
-	ib.toSend = ib.toSend[1:]
-	return &return_value
 }
