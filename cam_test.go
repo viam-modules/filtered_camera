@@ -245,7 +245,6 @@ func TestWindow(t *testing.T) {
 	b := time.Now().Add(-1 * time.Second)
 	c := time.Now().Add(-1 * time.Minute)
 
-	// Test the new ring buffer behavior
 	fc.buf.RingBuffer = []imagebuffer.CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
