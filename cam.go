@@ -22,6 +22,8 @@ import (
 
 var Model = Family.WithModel("filtered-camera")
 
+const defaultImageFreq = 1.0
+
 type Config struct {
 	Camera string
 	// Deprecated: use VisionServices instead
@@ -157,11 +159,15 @@ func init() {
 			fc.rejectedStats.startTime = time.Now()
 
 			// Initialize the image buffer
-			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, newConf.ImageFrequency)
+			imageFreq := newConf.ImageFrequency
+			if imageFreq == 0 {
+				imageFreq = defaultImageFreq
+			}
+			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq)
 
 			// Initialize background image capture worker
 			fc.backgroundWorkers = utils.NewStoppableWorkerWithTicker(
-				time.Duration(1000.0/newConf.ImageFrequency)*time.Millisecond,
+				time.Duration(1000.0/imageFreq)*time.Millisecond,
 				func(ctx context.Context) {
 					fc.captureImageInBackground(ctx)
 				},
