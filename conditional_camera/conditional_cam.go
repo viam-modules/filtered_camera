@@ -26,9 +26,10 @@ var (
 )
 
 type Config struct {
-	Camera        string `json:"camera"`
-	FilterSvc     string `json:"filter_service"`
-	WindowSeconds int    `json:"window_seconds"`
+	Camera         string  `json:"camera"`
+	FilterSvc      string  `json:"filter_service"`
+	WindowSeconds  int     `json:"window_seconds"`
+	ImageFrequency float64 `json:"image_frequency"`
 }
 
 func (cfg *Config) Validate(path string) ([]string, error) {
@@ -38,6 +39,10 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 
 	if cfg.FilterSvc == "" {
 		return nil, utils.NewConfigValidationFieldRequiredError(path, "filter_service")
+	}
+
+	if cfg.ImageFrequency <= 0 {
+		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency must be greater than 0"))
 	}
 
 	return []string{cfg.Camera, cfg.FilterSvc}, nil
@@ -78,7 +83,7 @@ type conditionalCamera struct {
 
 	cam     camera.Camera
 	filtSvc resource.Resource
-	buf     imagebuffer.ImageBuffer
+	buf     *imagebuffer.ImageBuffer
 }
 
 func (cc *conditionalCamera) Name() resource.Name {
@@ -124,9 +129,15 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		}
 	}
 
-	x := cc.buf.GetCachedData()
-	if x == nil {
-		return nil, meta, data.ErrNoCaptureToStore
+	cc.buf.Mu.Lock()
+	defer cc.buf.Mu.Unlock()
+
+	cc.buf.AddToBuffer_inlock(images, meta)
+
+	if len(cc.buf.ToSend) > 0 {
+		x := cc.buf.ToSend[0]
+		cc.buf.ToSend = cc.buf.ToSend[1:]
+		return x.Imgs, x.Meta, nil
 	}
 	return x.Imgs, x.Meta, nil
 }
@@ -136,7 +147,18 @@ func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return ans["result"].(bool), nil
+
+	// TODO: Make this configurable with "result" as default
+	if ans["result"].(bool) {
+		if time.Now().Before(cc.buf.CaptureTill) {
+			// send, but don't update captureTill
+			return true, nil
+		}
+		cc.buf.MarkShouldSend(time.Now())
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (cc *conditionalCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {

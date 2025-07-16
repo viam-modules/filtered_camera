@@ -70,6 +70,8 @@ func TestShouldSend(t *testing.T) {
 		conf: &Config{
 			Classifications: map[string]float64{"a": .8},
 			Objects:         map[string]float64{"b": .8},
+			WindowSeconds:   10,
+			ImageFrequency:  1.0,
 		},
 		logger: logger,
 		otherVisionServices: []vision.Service{
@@ -77,42 +79,58 @@ func TestShouldSend(t *testing.T) {
 		},
 		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
 		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
+		buf:                     imagebuffer.NewImageBuffer(10, 1.0),
 	}
 
-	res, err := fc.shouldSend(context.Background(), d)
+	res, err := fc.shouldSend(context.Background(), d, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
-	res, err = fc.shouldSend(context.Background(), c)
+	res, err = fc.shouldSend(context.Background(), c, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
-	res, err = fc.shouldSend(context.Background(), b)
+	res, err = fc.shouldSend(context.Background(), b, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
-	res, err = fc.shouldSend(context.Background(), a)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), a, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
+
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
 
 	// test wildcard
 
-	res, err = fc.shouldSend(context.Background(), e)
+	res, err = fc.shouldSend(context.Background(), e, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
-	res, err = fc.shouldSend(context.Background(), f)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), f, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
 	fc.acceptedClassifications[""] = map[string]float64{"*": .8}
 	fc.acceptedObjects[""] = map[string]float64{"*": .8}
 
-	res, err = fc.shouldSend(context.Background(), e)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), e, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
-	res, err = fc.shouldSend(context.Background(), f)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), f, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
@@ -122,14 +140,20 @@ func TestShouldSend(t *testing.T) {
 	fc.inhibitors = []vision.Service{
 		getDummyVisionService(),
 	}
-	res, err = fc.shouldSend(context.Background(), a)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), a, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
 	// test inhibit should not send with objects
 	fc.inhibitedClassifications = map[string]map[string]float64{}
 	fc.inhibitedObjects = map[string]map[string]float64{"": {"b": .1}}
-	res, err = fc.shouldSend(context.Background(), b)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), b, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
@@ -137,10 +161,17 @@ func TestShouldSend(t *testing.T) {
 	fc.inhibitedObjects = map[string]map[string]float64{"": {"b": .7}}
 	fc.acceptedObjects = map[string]map[string]float64{"": {"f": .7}}
 
-	res, err = fc.shouldSend(context.Background(), b)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), b, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
-	res, err = fc.shouldSend(context.Background(), f)
+
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), f, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
@@ -149,7 +180,11 @@ func TestShouldSend(t *testing.T) {
 	fc.rejectedStats = imageStats{}
 	fc.inhibitors = []vision.Service{}
 	fc.acceptedClassifications = map[string]map[string]float64{"": {"a": .8}}
-	res, err = fc.shouldSend(context.Background(), a)
+
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), a, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 	test.That(t, fc.acceptedStats.total, test.ShouldEqual, 1)
@@ -163,7 +198,10 @@ func TestShouldSend(t *testing.T) {
 	fc.inhibitors = []vision.Service{
 		getDummyVisionService(),
 	}
-	res, err = fc.shouldSend(context.Background(), b)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), b, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
@@ -174,11 +212,69 @@ func TestShouldSend(t *testing.T) {
 
 	// test that image that does not match any classification or object is rejected
 	fc.rejectedStats = imageStats{}
-	res, err = fc.shouldSend(context.Background(), d)
+	// Reset buffer state to clear CaptureTill
+	fc.buf.CaptureTill = time.Time{}
+
+	res, err = fc.shouldSend(context.Background(), d, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
 	test.That(t, fc.rejectedStats.breakdown["no vision services triggered"], test.ShouldEqual, 1)
+}
+
+func TestWindow(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications: map[string]float64{"a": .8},
+			Objects:         map[string]float64{"b": .8},
+			WindowSeconds:   10,
+			ImageFrequency:  1.0,
+		},
+		logger: logger,
+		otherVisionServices: []vision.Service{
+			getDummyVisionService(),
+		},
+	}
+
+	// Initialize the image buffer
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency)
+
+	a := time.Now()
+	b := time.Now().Add(-1 * time.Second)
+	c := time.Now().Add(-1 * time.Minute)
+
+	// Test the new ring buffer behavior
+	fc.buf.RingBuffer = []imagebuffer.CachedData{
+		{Meta: resource.ResponseMetadata{CapturedAt: a}},
+		{Meta: resource.ResponseMetadata{CapturedAt: b}},
+		{Meta: resource.ResponseMetadata{CapturedAt: c}},
+	}
+
+	fc.buf.MarkShouldSend(time.Now())
+
+	// With the new implementation, we expect images within the window to be sent
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 2)
+	test.That(t, a, test.ShouldEqual, fc.buf.ToSend[0].Meta.CapturedAt)
+	test.That(t, b, test.ShouldEqual, fc.buf.ToSend[1].Meta.CapturedAt)
+
+	// Reset for second test
+	fc.buf.RingBuffer = []imagebuffer.CachedData{
+		{Meta: resource.ResponseMetadata{CapturedAt: c}},
+		{Meta: resource.ResponseMetadata{CapturedAt: b}},
+		{Meta: resource.ResponseMetadata{CapturedAt: a}},
+	}
+	fc.buf.ToSend = []imagebuffer.CachedData{}
+
+	fc.buf.MarkShouldSend(time.Now())
+
+	// Test that the ring buffer still contains images (not cleared like old Buffer)
+	test.That(t, len(fc.buf.RingBuffer), test.ShouldEqual, 3)
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 2)
+	test.That(t, b, test.ShouldEqual, fc.buf.ToSend[0].Meta.CapturedAt)
+	test.That(t, a, test.ShouldEqual, fc.buf.ToSend[1].Meta.CapturedAt)
+
 }
 
 func TestValidate(t *testing.T) {
@@ -283,12 +379,13 @@ func TestImage(t *testing.T) {
 			Classifications: map[string]float64{"a": .8},
 			Objects:         map[string]float64{"b": .8},
 			WindowSeconds:   10,
+			ImageFrequency:  1.0,
 		},
 		logger: logger,
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.ImageBuffer{},
+		buf: imagebuffer.NewImageBuffer(10, 1.0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -333,12 +430,13 @@ func TestImages(t *testing.T) {
 			Classifications: map[string]float64{"a": .8},
 			Objects:         map[string]float64{"b": .8},
 			WindowSeconds:   10,
+			ImageFrequency:  1.0,
 		},
 		logger: logger,
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.ImageBuffer{},
+		buf: imagebuffer.NewImageBuffer(10, 1.0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
@@ -376,12 +474,13 @@ func TestProperties(t *testing.T) {
 			Classifications: map[string]float64{"a": .8},
 			Objects:         map[string]float64{"b": .8},
 			WindowSeconds:   10,
+			ImageFrequency:  1.0,
 		},
 		logger: logger,
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.ImageBuffer{},
+		buf: imagebuffer.NewImageBuffer(10, 1.0),
 		cam: &inject.Camera{
 			PropertiesFunc: func(ctx context.Context) (camera.Properties, error) {
 				return properties, nil
@@ -402,11 +501,12 @@ func TestDoCommand(t *testing.T) {
 			Classifications: map[string]float64{"a": .8},
 			Objects:         map[string]float64{"b": .8},
 			WindowSeconds:   10,
+			ImageFrequency:  1.0,
 		},
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.ImageBuffer{},
+		buf: imagebuffer.NewImageBuffer(10, 1.0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -449,4 +549,117 @@ func TestDoCommand(t *testing.T) {
 	visionBreakdown, ok = rejectedStats["vision"].(map[string]int)
 	test.That(t, ok, test.ShouldEqual, true)
 	test.That(t, visionBreakdown, test.ShouldResemble, map[string]int{"bar": 2})
+}
+
+func TestRingBufferTriggerWindows(t *testing.T) {
+	// This test verifies that the ring buffer correctly captures images within trigger windows
+	// It simulates image capture at 1 Hz with 2-second windows around triggers
+	// The ring buffer maintains only the most recent 4 images (2 * windowSeconds * imageFrequency)
+
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	//create a camera that returns images one after another the other simulated to be 1 second
+	// after each other
+	imagesCam := inject.NewCamera("test_camera")
+	timeCount := 0 // inital time
+	imagesCam.ImagesFunc = func(ctx context.Context) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		timeCount++
+		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
+		return []camera.NamedImage{}, // Empty images slice for test
+			resource.ResponseMetadata{
+				CapturedAt: imageTime,
+			},
+			nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications: map[string]float64{"a": .8},
+			Objects:         map[string]float64{"b": .8},
+			WindowSeconds:   2,
+			ImageFrequency:  1.0, // 1 Hz
+		},
+		logger: logger,
+		cam:    imagesCam,
+		otherVisionServices: []vision.Service{
+			getDummyVisionService(),
+		},
+	}
+
+	// Note: The ring buffer will limit itself to 2 * windowSeconds * imageFrequency = 4 images
+	// This test works within that constraint to verify proper trigger window behavior
+
+	// Use a base time that's close to current time to make windows work
+	// Initialize the image buffer
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency)
+
+	// First, add images at times 1, 2, 3, 4, 5
+	for i := 1; i <= 5; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	// Verify ring buffer contains only the last 4 images (2, 3, 4, 5)
+	test.That(t, len(fc.buf.RingBuffer), test.ShouldEqual, 4)
+
+	// Manually trigger at time 5, which should capture images 3, 4, 5, 6, 7 (within 2 second window [3, 7])
+	triggerTime1 := baseTime.Add(5 * time.Second)
+	fc.buf.MarkShouldSend(triggerTime1)
+
+	// Should capture images 3, 4, 5, 6 (within window [3, 7])
+	expectedFirstTrigger := []time.Time{
+		baseTime.Add(3 * time.Second),
+		baseTime.Add(4 * time.Second),
+		baseTime.Add(5 * time.Second),
+	}
+
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 3)
+	for i, expected := range expectedFirstTrigger {
+		test.That(t, fc.buf.ToSend[i].Meta.CapturedAt, test.ShouldEqual, expected)
+	}
+	// Now add images 6-10 leading up to second trigger, and check if only two more images are added
+	// to the two send buffer
+	expectedFirstTrigger = append(expectedFirstTrigger, baseTime.Add(6*time.Second))
+	expectedFirstTrigger = append(expectedFirstTrigger, baseTime.Add(7*time.Second))
+	for i := 6; i <= 10; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 5)
+	for i, expected := range expectedFirstTrigger {
+		test.That(t, fc.buf.ToSend[i].Meta.CapturedAt, test.ShouldEqual, expected)
+	}
+
+	// Clear ToSend to prepare for second trigger
+	fc.buf.ToSend = []imagebuffer.CachedData{}
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 0)
+	// Verify ring buffer contains only the last 4 images (7, 8, 9, 10)
+	test.That(t, len(fc.buf.RingBuffer), test.ShouldEqual, 4)
+
+	// Manually trigger at time 10, which should capture images 8, 9, 10
+	triggerTime2 := baseTime.Add(10 * time.Second)
+	fc.buf.MarkShouldSend(triggerTime2)
+
+	// Should capture images 8, 9, 10
+	expectedTrigger := []time.Time{
+		baseTime.Add(8 * time.Second),
+		baseTime.Add(9 * time.Second),
+		baseTime.Add(10 * time.Second),
+	}
+
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 3)
+	for i, expected := range expectedTrigger {
+		test.That(t, fc.buf.ToSend[i].Meta.CapturedAt, test.ShouldEqual, expected)
+	}
+	// Now add images 11 - 15 after trigger, and check if only two more images are added
+	// to the two send buffer
+	expectedTrigger = append(expectedTrigger, baseTime.Add(11*time.Second))
+	expectedTrigger = append(expectedTrigger, baseTime.Add(12*time.Second))
+	for i := 11; i <= 15; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 5)
+	for i, expected := range expectedTrigger {
+		test.That(t, fc.buf.ToSend[i].Meta.CapturedAt, test.ShouldEqual, expected)
+	}
 }

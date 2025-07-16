@@ -7,7 +7,6 @@ import (
 	"image"
 	"time"
 
-	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
@@ -17,6 +16,8 @@ import (
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
 	"go.viam.com/utils"
+
+	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 )
 
 var Model = Family.WithModel("filtered-camera")
@@ -155,6 +156,9 @@ func init() {
 			fc.acceptedStats.startTime = time.Now()
 			fc.rejectedStats.startTime = time.Now()
 
+			// Initialize the image buffer
+			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, newConf.ImageFrequency)
+
 			// Initialize background image capture worker
 			fc.backgroundWorkers = utils.NewStoppableWorkerWithTicker(
 				time.Duration(1000.0/newConf.ImageFrequency)*time.Millisecond,
@@ -176,7 +180,7 @@ type filteredCamera struct {
 	logger logging.Logger
 
 	cam                      camera.Camera
-	buf                      imagebuffer.ImageBuffer
+	buf                      *imagebuffer.ImageBuffer
 	backgroundWorkers        *utils.StoppableWorkers
 	inhibitors               []vision.Service
 	otherVisionServices      []vision.Service
@@ -308,8 +312,16 @@ func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
 		fc.logger.Debugf("Error capturing image in background: %v", err)
 		return
 	}
-
-	fc.buf.AddToRingBuffer(images, meta, fc.conf.WindowSeconds, fc.conf.ImageFrequency)
+	now := meta.CapturedAt
+	// if we're Within the trigger time still, directly add the images to ToSend buffer
+	// else then store them in the ring buffer
+	if now.Before(fc.buf.CaptureTill) || now.Equal(fc.buf.CaptureTill) {
+		fc.buf.Mu.Lock()
+		fc.buf.ToSend = append(fc.buf.ToSend, imagebuffer.CachedData{Imgs: images, Meta: meta})
+		fc.buf.Mu.Unlock()
+	} else {
+		fc.buf.AddToRingBuffer(images, meta)
+	}
 }
 
 func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
@@ -329,6 +341,8 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 	return fc.images(ctx, nil)
 }
 
+// images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
+// It then returns the next image present in the ToSend buffer back to the client / data manager
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	images, meta, err := fc.cam.Images(ctx)
 	if err != nil {
@@ -342,7 +356,8 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	for _, img := range images {
-		shouldSend, err := fc.shouldSend(ctx, img.Image)
+		// method will call MarkShouldSend() internally if a filter passes (and inhibit doesn't)
+		shouldSend, err := fc.shouldSend(ctx, img.Image, meta.CapturedAt)
 		if err != nil {
 			return nil, meta, err
 		}
@@ -351,33 +366,19 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			// Return the cached images from the ring buffer
 			fc.buf.Mu.Lock()
 			defer fc.buf.Mu.Unlock()
-			
+
 			if len(fc.buf.ToSend) > 0 {
 				x := fc.buf.ToSend[0]
 				fc.buf.ToSend = fc.buf.ToSend[1:]
 				return x.Imgs, x.Meta, nil
 			}
-			
+
 			return images, meta, nil
 		}
 	}
-
-	// Check if we should send images from the ongoing capture window
-	if time.Now().Before(fc.buf.CaptureTill) {
-		// Get post-trigger images from the ring buffer
-		postTriggerImages := fc.buf.GetPostTriggerImages(fc.conf.WindowSeconds)
-		if len(postTriggerImages) > 0 {
-			// Return the most recent image from the ring buffer
-			latest := postTriggerImages[len(postTriggerImages)-1]
-			return latest.Imgs, latest.Meta, nil
-		}
-	}
-
+	// background loop will fill ToSend buffer as long as within CaptureTill
 	fc.buf.Mu.Lock()
 	defer fc.buf.Mu.Unlock()
-
-	fc.buf.AddToBuffer_inlock(images, meta, fc.conf.WindowSeconds)
-
 	if len(fc.buf.ToSend) > 0 {
 		x := fc.buf.ToSend[0]
 		fc.buf.ToSend = fc.buf.ToSend[1:]
@@ -386,9 +387,12 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	return x.Imgs, x.Meta, nil
 }
 
-// We return whether the classifiers/detectors think this image is interesting
-func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
-	fc.logger.Debugf("started shouldSend")
+func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now time.Time) (bool, error) {
+	//
+	if now.Before(fc.buf.CaptureTill) {
+		// send, but don't update captureTill
+		return true, nil
+	}
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
@@ -433,6 +437,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
+				fc.buf.MarkShouldSend(now)
 				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
@@ -448,6 +453,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
+				fc.buf.MarkShouldSend(now)
 				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
