@@ -21,17 +21,7 @@ import (
 
 var Model = Family.WithModel("filtered-camera")
 
-type Config struct {
-	Camera string
-	// Deprecated: use VisionServices instead
-	Vision         string
-	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
-	WindowSeconds  int                   `json:"window_seconds"`
-
-	Classifications map[string]float64
-	Objects         map[string]float64
-}
-
+// We will have one VisionServiceConfig for each vision service the filtered camera connects to
 type VisionServiceConfig struct {
 	Vision          string             `json:"vision"`
 	Objects         map[string]float64 `json:"objects,omitempty"`
@@ -48,6 +38,17 @@ func (config *VisionServiceConfig) Validate(path string) error {
 	return nil
 }
 
+type Config struct {
+	Camera string
+	// Deprecated: use VisionServices instead
+	Vision         string
+	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
+	WindowSeconds  int                   `json:"window_seconds"`
+
+	Classifications map[string]float64
+	Objects         map[string]float64
+}
+
 func (cfg *Config) Validate(path string) ([]string, error) {
 	if cfg.Camera == "" {
 		return nil, utils.NewConfigValidationFieldRequiredError(path, "camera")
@@ -60,8 +61,6 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	}
 
 	deps := []string{cfg.Camera}
-	inhibitors := []string{}
-	otherVisionServices := []string{}
 
 	if cfg.Vision != "" {
 		logger := logging.NewBlankLogger("deprecated")
@@ -72,16 +71,9 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 			if err := vs.Validate(fmt.Sprintf("%s.%s.%d", path, "vision-service", idx)); err != nil {
 				return nil, err
 			}
-			if vs.Inhibit {
-				inhibitors = append(inhibitors, vs.Vision)
-			} else {
-				otherVisionServices = append(otherVisionServices, vs.Vision)
-			}
+			deps = append(deps, vs.Vision)
 		}
 	}
-
-	deps = append(deps, inhibitors...)
-	deps = append(deps, otherVisionServices...)
 
 	return deps, nil
 }
@@ -186,33 +178,22 @@ func (is *imageStats) update(visionService string) {
 	if is.breakdown == nil {
 		is.breakdown = make(map[string]int)
 	}
-	if _, ok := is.breakdown[visionService]; !ok {
-		is.breakdown[visionService] = 1
-		return
-	}
+	// If the key is not yet in the map, its value defaults to 0.
 	is.breakdown[visionService]++
 }
 
 func (fc *filteredCamera) formatStats() map[string]interface{} {
+	acceptedStats := make(map[string]interface{})
+	acceptedStats["total"] = fc.acceptedStats.total
+	acceptedStats["vision"] = fc.acceptedStats.breakdown
+
+	rejectedStats := make(map[string]interface{})
+	rejectedStats["total"] = fc.rejectedStats.total
+	rejectedStats["vision"] = fc.rejectedStats.breakdown
+
 	stats := make(map[string]interface{})
-	stats["accepted"] = make(map[string]interface{})
-	stats["rejected"] = make(map[string]interface{})
-
-	if acceptedStats, ok := stats["accepted"].(map[string]interface{}); !ok {
-		fc.logger.Errorf("failed to get stats")
-		return nil
-	} else {
-		acceptedStats["total"] = fc.acceptedStats.total
-		acceptedStats["vision"] = fc.acceptedStats.breakdown
-	}
-	if rejectedStats, ok := stats["rejected"].(map[string]interface{}); !ok {
-		fc.logger.Errorf("failed to get stats")
-		return nil
-	} else {
-		rejectedStats["total"] = fc.rejectedStats.total
-		rejectedStats["vision"] = fc.rejectedStats.breakdown
-	}
-
+	stats["accepted"] = acceptedStats
+	stats["rejected"] = rejectedStats
 	stats["start_time"] = fc.acceptedStats.startTime.Format(time.RFC1123)
 	return stats
 }

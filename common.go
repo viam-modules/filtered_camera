@@ -23,6 +23,7 @@ func IsFromDataMgmt(ctx context.Context, extra map[string]interface{}) bool {
 	return false
 }
 
+// Returns a byte array representing the first image in the list of named images
 func ImagesToImage(ctx context.Context, ni []camera.NamedImage, mimeType string) ([]byte, camera.ImageMetadata, error) {
 	data, err := rimage.EncodeImage(ctx, ni[0].Image, mimeType)
 	if err != nil {

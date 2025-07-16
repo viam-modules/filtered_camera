@@ -38,7 +38,7 @@ test:
 lint:
 	golangci-lint run --timeout 10m
 
-all: module test
+all: $(MODULE_BINARY) test
 
 update:
 	go get go.viam.com/rdk@latest
