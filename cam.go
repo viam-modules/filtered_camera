@@ -369,7 +369,6 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		}
 		if shouldSend {
 			fc.buf.CacheImages(images)
-			// Return the cached images from the ring buffer
 			fc.buf.Mu.Lock()
 			defer fc.buf.Mu.Unlock()
 
