@@ -319,7 +319,7 @@ func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
 		return
 	}
 	now := meta.CapturedAt
-	// if we're within the trigger time still, directly add the images to ToSend buffer
+	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
 	// else then store them in the ring buffer
 	if now.Before(fc.buf.CaptureTill) || now.Equal(fc.buf.CaptureTill) {
 		fc.buf.Mu.Lock()
@@ -362,7 +362,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	for _, img := range images {
-		// method will call MarkShouldSend() internally if a filter passes (and inhibit doesn't)
+		// method fc.shouldSend will call MarkShouldSend() internally if a filter passes (and inhibit doesn't)
 		shouldSend, err := fc.shouldSend(ctx, img.Image, meta.CapturedAt)
 		if err != nil {
 			return nil, meta, err
@@ -394,11 +394,6 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now time.Time) (bool, error) {
-	//
-	if now.Before(fc.buf.CaptureTill) {
-		// send, but don't update captureTill
-		return true, nil
-	}
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
@@ -464,6 +459,12 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 				return true, nil
 			}
 		}
+	}
+	// if we don't inhibit or update CaptureTill with another trigger, check to see if still within
+	// the CaptureTill window
+	if now.Before(fc.buf.CaptureTill) {
+		// send, but don't update captureTill
+		return true, nil
 	}
 
 	if len(fc.otherVisionServices) == 0 {
