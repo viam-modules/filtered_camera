@@ -319,7 +319,7 @@ func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
 		return
 	}
 	now := meta.CapturedAt
-	// if we're Within the trigger time still, directly add the images to ToSend buffer
+	// if we're within the trigger time still, directly add the images to ToSend buffer
 	// else then store them in the ring buffer
 	if now.Before(fc.buf.CaptureTill) || now.Equal(fc.buf.CaptureTill) {
 		fc.buf.Mu.Lock()
