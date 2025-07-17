@@ -63,8 +63,8 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 		return nil, utils.NewConfigValidationError(path, errors.New("cannot specify both vision and vision_services"))
 	}
 
-	if cfg.ImageFrequency <= 0 {
-		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency must be greater than 0"))
+	if cfg.ImageFrequency < 0 {
+		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency cannot be less than 0"))
 	}
 
 	deps := []string{cfg.Camera}
