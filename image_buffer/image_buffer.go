@@ -1,7 +1,6 @@
 package imagebuffer
 
 import (
-	"sort"
 	"sync"
 	"time"
 
@@ -15,71 +14,85 @@ type CachedData struct {
 }
 
 type ImageBuffer struct {
-	mu           sync.Mutex
-	recentImages []CachedData  // Upload these if something interesting happens in the near future
-	toSend       []CachedData  // Upload these no matter what
-	captureTill  time.Time
+	Mu             sync.Mutex
+	RingBuffer     []CachedData
+	ToSend         []CachedData
+	CaptureTill    time.Time
+	LastCached     CachedData
+	WindowSeconds  int
+	ImageFrequency float64
 }
 
-func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
-	return time.Second * time.Duration(windowSeconds)
-}
-
-// Remove too-old images from the recentImages, then add the current image to the appropriate buffer
-func (ib *ImageBuffer) AddToBuffer(imgs []camera.NamedImage, meta resource.ResponseMetadata, windowSeconds int) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-
-	ib.cleanBuffer(windowSeconds)
-	if ib.captureTill.Before(time.Now()) {
-		ib.recentImages = append(ib.recentImages, CachedData{imgs, meta})
-	} else {
-		ib.toSend = append(ib.toSend, CachedData{imgs, meta})
+func NewImageBuffer(windowSeconds int, imageFrequency float64) *ImageBuffer {
+	return &ImageBuffer{
+		RingBuffer:     []CachedData{},
+		ToSend:         []CachedData{},
+		WindowSeconds:  windowSeconds,
+		ImageFrequency: imageFrequency,
 	}
 }
 
-// Remove too-old images from recentImages
-func (ib *ImageBuffer) cleanBuffer(windowSeconds int) {
-	sort.Slice(ib.recentImages, func(i, j int) bool {
-		a := ib.recentImages[i]
-		b := ib.recentImages[j]
-		return a.Meta.CapturedAt.Before(b.Meta.CapturedAt)
-	})
+func (ib *ImageBuffer) windowDuration() time.Duration {
+	return time.Second * time.Duration(ib.WindowSeconds)
+}
 
-	early := time.Now().Add(-1 * ib.windowDuration(windowSeconds))
-	for len(ib.recentImages) > 0 {
-		if ib.recentImages[0].Meta.CapturedAt.After(early) {
-			return
+func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
+	ib.Mu.Lock()
+	defer ib.Mu.Unlock()
+
+	ib.CaptureTill = now.Add(ib.windowDuration())
+
+	// Send images from the ring buffer and continue collecting for windowDuration
+	triggerTime := now
+	var imagesToSend []CachedData
+
+	// Create a map of existing timestamps in ToSend for O(1) lookup
+	existingTimes := make(map[int64]bool)
+	for _, existing := range ib.ToSend {
+		existingTimes[existing.Meta.CapturedAt.UnixNano()] = true
+	}
+
+	// Add images from the ring buffer that are within the window
+	windowDuration := ib.windowDuration()
+	for _, cached := range ib.RingBuffer {
+		timeDiff := triggerTime.Sub(cached.Meta.CapturedAt)
+		// Include images within windowSeconds before and after trigger
+		if timeDiff >= -windowDuration && timeDiff <= windowDuration {
+			// Check if this image is already in ToSend to avoid duplicates
+			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
+				imagesToSend = append(imagesToSend, cached)
+			}
 		}
-		ib.recentImages = ib.recentImages[1:]
+	}
+
+	// Add the images to send
+	ib.ToSend = append(ib.ToSend, imagesToSend...)
+}
+
+func (ib *ImageBuffer) AddToRingBuffer(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
+	ib.Mu.Lock()
+	defer ib.Mu.Unlock()
+
+	ib.RingBuffer = append(ib.RingBuffer, CachedData{imgs, meta})
+
+	// Calculate the maximum number of images to keep in the ring buffer
+	// Keep images for 2 * windowSeconds (before and after trigger)
+	maxImages := int(2 * float64(ib.WindowSeconds) * ib.ImageFrequency)
+
+	// Remove oldest images if we exceed the max
+	if len(ib.RingBuffer) > maxImages {
+		ib.RingBuffer = ib.RingBuffer[len(ib.RingBuffer)-maxImages:]
 	}
 }
 
-func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
+func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
+	ib.Mu.Lock()
+	defer ib.Mu.Unlock()
 
-	ib.captureTill = time.Now().Add(ib.windowDuration(windowSeconds))
-	if windowSeconds == 0 && len(ib.recentImages) != 0 {
-		// If windowSeconds is 0, keep the most recent image (the one that triggered this function
-		// call, which we should send) and throw out everything else.
-		ib.toSend = append(ib.toSend, ib.recentImages[len(ib.recentImages)-1])
-	} else {
-		ib.cleanBuffer(windowSeconds)
-		ib.toSend = append(ib.toSend, ib.recentImages...)
+	ib.LastCached = CachedData{
+		Imgs: images,
+		Meta: resource.ResponseMetadata{
+			CapturedAt: time.Now(),
+		},
 	}
-	ib.recentImages = []CachedData{}
-}
-
-// Returns the oldest CachedData we're supposed to send. Returns nil if the buffer is empty.
-func (ib *ImageBuffer) GetCachedData() *CachedData {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-
-	if len(ib.toSend) == 0 {
-		return nil
-	}
-	return_value := ib.toSend[0]
-	ib.toSend = ib.toSend[1:]
-	return &return_value
 }

@@ -15,35 +15,38 @@ var (
 	c = time.Now().Add(-1 * time.Minute)
 )
 
-func TestUnsortedWindow(t *testing.T) {
-	buf := ImageBuffer{}
-	buf.recentImages = []CachedData{
+func TestWindow(t *testing.T) {
+
+	// Initialize the image buffer
+	buf := NewImageBuffer(10, 1.0)
+
+	buf.RingBuffer = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
 	}
 
-	buf.MarkShouldSend(10)
+	buf.MarkShouldSend(time.Now())
 
-	test.That(t, len(buf.recentImages), test.ShouldEqual, 0)
-	test.That(t, len(buf.toSend), test.ShouldEqual, 2)
-	test.That(t, b, test.ShouldEqual, buf.toSend[0].Meta.CapturedAt)
-	test.That(t, a, test.ShouldEqual, buf.toSend[1].Meta.CapturedAt)
-}
+	// With the new implementation, we expect images within the window to be sent
+	test.That(t, len(buf.ToSend), test.ShouldEqual, 2)
+	test.That(t, a, test.ShouldEqual, buf.ToSend[0].Meta.CapturedAt)
+	test.That(t, b, test.ShouldEqual, buf.ToSend[1].Meta.CapturedAt)
 
-func TestSortedWindow(t *testing.T) {
-	buf := ImageBuffer{}
-	buf.recentImages = []CachedData{
+	// Reset for second test
+	buf.RingBuffer = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
 	}
-	buf.toSend = []CachedData{}
+	buf.ToSend = []CachedData{}
 
-	buf.MarkShouldSend(10)
+	buf.MarkShouldSend(time.Now())
 
-	test.That(t, len(buf.recentImages), test.ShouldEqual, 0)
-	test.That(t, len(buf.toSend), test.ShouldEqual, 2)
-	test.That(t, b, test.ShouldEqual, buf.toSend[0].Meta.CapturedAt)
-	test.That(t, a, test.ShouldEqual, buf.toSend[1].Meta.CapturedAt)
+	// Test that the ring buffer still contains images (not cleared like old Buffer)
+	test.That(t, len(buf.RingBuffer), test.ShouldEqual, 3)
+	test.That(t, len(buf.ToSend), test.ShouldEqual, 2)
+	test.That(t, b, test.ShouldEqual, buf.ToSend[0].Meta.CapturedAt)
+	test.That(t, a, test.ShouldEqual, buf.ToSend[1].Meta.CapturedAt)
+
 }
