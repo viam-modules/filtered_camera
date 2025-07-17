@@ -121,7 +121,9 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		return images, meta, err
 	}
 
-	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
+	if filtered_camera.IsFromDataMgmt(ctx, extra) {
+		cc.buf.AddToRingBuffer(images, meta)
+	} else {
 		return images, meta, nil
 	}
 
@@ -138,7 +140,6 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	cc.buf.Mu.Lock()
 	defer cc.buf.Mu.Unlock()
 
-	cc.buf.AddToBuffer_inlock(images, meta)
 
 	if len(cc.buf.ToSend) > 0 {
 		x := cc.buf.ToSend[0]
