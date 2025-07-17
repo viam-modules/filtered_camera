@@ -79,7 +79,17 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 		timeDiff := triggerTime.Sub(cached.Meta.CapturedAt)
 		// Include images within windowSeconds before and after trigger
 		if timeDiff >= -windowDuration && timeDiff <= windowDuration {
-			imagesToSend = append(imagesToSend, cached)
+			// Check if this image is already in ToSend to avoid duplicates
+			found := false
+			for _, existing := range ib.ToSend {
+				if existing.Meta.CapturedAt.Equal(cached.Meta.CapturedAt) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				imagesToSend = append(imagesToSend, cached)
+			}
 		}
 	}
 
