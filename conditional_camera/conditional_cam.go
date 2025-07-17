@@ -154,18 +154,7 @@ func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
-	// TODO: Make this configurable with "result" as default
-	if ans["result"].(bool) {
-		if time.Now().Before(cc.buf.CaptureTill) {
-			// send, but don't update captureTill
-			return true, nil
-		}
-		cc.buf.MarkShouldSend(time.Now())
-		return true, nil
-	}
-
-	return false, nil
+	return ans["result"].(bool), nil
 }
 
 func (cc *conditionalCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
