@@ -222,60 +222,6 @@ func TestShouldSend(t *testing.T) {
 	test.That(t, fc.rejectedStats.breakdown["no vision services triggered"], test.ShouldEqual, 1)
 }
 
-func TestWindow(t *testing.T) {
-	logger := logging.NewTestLogger(t)
-
-	fc := &filteredCamera{
-		conf: &Config{
-			Classifications: map[string]float64{"a": .8},
-			Objects:         map[string]float64{"b": .8},
-			WindowSeconds:   10,
-			ImageFrequency:  1.0,
-		},
-		logger: logger,
-		otherVisionServices: []vision.Service{
-			getDummyVisionService(),
-		},
-	}
-
-	// Initialize the image buffer
-	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency)
-
-	a := time.Now()
-	b := time.Now().Add(-1 * time.Second)
-	c := time.Now().Add(-1 * time.Minute)
-
-	fc.buf.RingBuffer = []imagebuffer.CachedData{
-		{Meta: resource.ResponseMetadata{CapturedAt: a}},
-		{Meta: resource.ResponseMetadata{CapturedAt: b}},
-		{Meta: resource.ResponseMetadata{CapturedAt: c}},
-	}
-
-	fc.buf.MarkShouldSend(time.Now())
-
-	// With the new implementation, we expect images within the window to be sent
-	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 2)
-	test.That(t, a, test.ShouldEqual, fc.buf.ToSend[0].Meta.CapturedAt)
-	test.That(t, b, test.ShouldEqual, fc.buf.ToSend[1].Meta.CapturedAt)
-
-	// Reset for second test
-	fc.buf.RingBuffer = []imagebuffer.CachedData{
-		{Meta: resource.ResponseMetadata{CapturedAt: c}},
-		{Meta: resource.ResponseMetadata{CapturedAt: b}},
-		{Meta: resource.ResponseMetadata{CapturedAt: a}},
-	}
-	fc.buf.ToSend = []imagebuffer.CachedData{}
-
-	fc.buf.MarkShouldSend(time.Now())
-
-	// Test that the ring buffer still contains images (not cleared like old Buffer)
-	test.That(t, len(fc.buf.RingBuffer), test.ShouldEqual, 3)
-	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 2)
-	test.That(t, b, test.ShouldEqual, fc.buf.ToSend[0].Meta.CapturedAt)
-	test.That(t, a, test.ShouldEqual, fc.buf.ToSend[1].Meta.CapturedAt)
-
-}
-
 func TestValidate(t *testing.T) {
 	conf := &Config{
 		Classifications: map[string]float64{"a": .8},

@@ -355,9 +355,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		return images, meta, err
 	}
 
-	if IsFromDataMgmt(ctx, extra) {
-		fc.buf.AddToBuffer(images, meta, fc.conf.WindowSeconds)
-	} else {
+	if !IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
 
@@ -389,7 +387,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		fc.buf.ToSend = fc.buf.ToSend[1:]
 		return x.Imgs, x.Meta, nil
 	}
-	return x.Imgs, x.Meta, nil
+	return nil, meta, data.ErrNoCaptureToStore
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now time.Time) (bool, error) {
