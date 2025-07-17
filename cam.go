@@ -360,12 +360,13 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	for _, img := range images {
-		// method fc.shouldSend will call MarkShouldSend() internally if a filter passes (and inhibit doesn't)
+		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
 		shouldSend, err := fc.shouldSend(ctx, img.Image, meta.CapturedAt)
 		if err != nil {
 			return nil, meta, err
 		}
 		if shouldSend {
+			fc.buf.MarkShouldSend(meta.CapturedAt)
 			fc.buf.CacheImages(images)
 			fc.buf.Mu.Lock()
 			defer fc.buf.Mu.Unlock()
@@ -379,7 +380,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			return images, meta, nil
 		}
 	}
-	// background loop will fill ToSend buffer as long as within CaptureTill
+	// background loop will fill ToSend buffer as long as within CaptureTill time
 	fc.buf.Mu.Lock()
 	defer fc.buf.Mu.Unlock()
 	if len(fc.buf.ToSend) > 0 {
@@ -435,7 +436,6 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
-				fc.buf.MarkShouldSend(now)
 				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
@@ -451,7 +451,6 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
-				fc.buf.MarkShouldSend(now)
 				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
