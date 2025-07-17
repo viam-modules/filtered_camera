@@ -366,6 +366,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			return nil, meta, err
 		}
 		if shouldSend {
+			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
 			fc.buf.CacheImages(images)
 			fc.buf.Mu.Lock()
