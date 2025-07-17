@@ -686,9 +686,6 @@ func TestMultipleTriggerWindows(t *testing.T) {
 		baseTime.Add(10 * time.Second),
 		baseTime.Add(11 * time.Second),
 	}
-	for _, tosend := range fc.buf.ToSend {
-		t.Logf("ts: %s\n", tosend.Meta.CapturedAt)
-	}
 	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 9)
 	for i, expected := range expectedTrigger {
 		test.That(t, fc.buf.ToSend[i].Meta.CapturedAt, test.ShouldEqual, expected)

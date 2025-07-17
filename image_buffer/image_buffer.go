@@ -73,6 +73,12 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	triggerTime := now
 	var imagesToSend []CachedData
 
+	// Create a map of existing timestamps in ToSend for O(1) lookup
+	existingTimes := make(map[int64]bool)
+	for _, existing := range ib.ToSend {
+		existingTimes[existing.Meta.CapturedAt.UnixNano()] = true
+	}
+
 	// Add images from the ring buffer that are within the window
 	windowDuration := ib.windowDuration()
 	for _, cached := range ib.RingBuffer {
@@ -80,14 +86,7 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 		// Include images within windowSeconds before and after trigger
 		if timeDiff >= -windowDuration && timeDiff <= windowDuration {
 			// Check if this image is already in ToSend to avoid duplicates
-			found := false
-			for _, existing := range ib.ToSend {
-				if existing.Meta.CapturedAt.Equal(cached.Meta.CapturedAt) {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
 				imagesToSend = append(imagesToSend, cached)
 			}
 		}
