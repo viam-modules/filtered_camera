@@ -662,7 +662,7 @@ func TestMultipleTriggerWindows(t *testing.T) {
 	// Manually trigger at time 5
 	triggerTime1 := baseTime.Add(5 * time.Second)
 	fc.buf.MarkShouldSend(triggerTime1)
-	// Now add images 6-15, with additional triggers at 7 and 9
+	// Now add more images, with additional triggers at 7 and 9
 	fc.captureImageInBackground(ctx) // 6
 	fc.captureImageInBackground(ctx) // 7
 	triggerTime2 := baseTime.Add(7 * time.Second)
@@ -671,7 +671,7 @@ func TestMultipleTriggerWindows(t *testing.T) {
 	fc.captureImageInBackground(ctx) // 9
 	triggerTime3 := baseTime.Add(9 * time.Second)
 	fc.buf.MarkShouldSend(triggerTime3)
-	for i := 10; i <= 15; i++ {
+	for i := 10; i <= 20; i++ {
 		fc.captureImageInBackground(ctx)
 	}
 	// so ToSend should capture [3, 11] and make no repeats
@@ -686,7 +686,9 @@ func TestMultipleTriggerWindows(t *testing.T) {
 		baseTime.Add(10 * time.Second),
 		baseTime.Add(11 * time.Second),
 	}
-
+	for _, tosend := range fc.buf.ToSend {
+		t.Logf("ts: %s\n", tosend.Meta.CapturedAt)
+	}
 	test.That(t, len(fc.buf.ToSend), test.ShouldEqual, 9)
 	for i, expected := range expectedTrigger {
 		test.That(t, fc.buf.ToSend[i].Meta.CapturedAt, test.ShouldEqual, expected)
