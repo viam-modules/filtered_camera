@@ -456,13 +456,6 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 			}
 		}
 	}
-	// if we don't inhibit or update CaptureTill with another trigger, check to see if still within
-	// the CaptureTill window
-	if now.Before(fc.buf.CaptureTill) {
-		// send, but don't update captureTill
-		return true, nil
-	}
-
 	if len(fc.otherVisionServices) == 0 {
 		fc.acceptedStats.update("no vision services triggered")
 		fc.logger.Debugf("defaulting to true")
