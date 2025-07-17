@@ -5,6 +5,7 @@ package conditional_camera
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
@@ -68,6 +69,13 @@ func init() {
 				return nil, err
 			}
 
+			// Initialize the image buffer
+			imageFreq := newConf.ImageFrequency
+			if imageFreq == 0 {
+				imageFreq = 1.0
+			}
+			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq)
+
 			return cc, nil
 		},
 	})
@@ -113,9 +121,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		return images, meta, err
 	}
 
-	if filtered_camera.IsFromDataMgmt(ctx, extra) {
-		cc.buf.AddToBuffer(images, meta, cc.conf.WindowSeconds)
-	} else {
+	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
 
@@ -125,7 +131,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 			return nil, meta, err
 		}
 		if shouldSend {
-			cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
+			cc.buf.MarkShouldSend(meta.CapturedAt)
 		}
 	}
 
@@ -139,7 +145,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		cc.buf.ToSend = cc.buf.ToSend[1:]
 		return x.Imgs, x.Meta, nil
 	}
-	return x.Imgs, x.Meta, nil
+	return nil, meta, data.ErrNoCaptureToStore
 }
 
 func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
