@@ -1,7 +1,6 @@
 package imagebuffer
 
 import (
-	"sort"
 	"sync"
 	"time"
 
@@ -16,7 +15,6 @@ type CachedData struct {
 
 type ImageBuffer struct {
 	Mu             sync.Mutex
-	Buffer         []CachedData
 	RingBuffer     []CachedData
 	ToSend         []CachedData
 	CaptureTill    time.Time
@@ -27,7 +25,6 @@ type ImageBuffer struct {
 
 func NewImageBuffer(windowSeconds int, imageFrequency float64) *ImageBuffer {
 	return &ImageBuffer{
-		Buffer:         []CachedData{},
 		RingBuffer:     []CachedData{},
 		ToSend:         []CachedData{},
 		WindowSeconds:  windowSeconds,
@@ -37,30 +34,6 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64) *ImageBuffer {
 
 func (ib *ImageBuffer) windowDuration() time.Duration {
 	return time.Second * time.Duration(ib.WindowSeconds)
-}
-
-func (ib *ImageBuffer) AddToBuffer_inlock(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
-	if ib.WindowSeconds == 0 {
-		return
-	}
-
-	ib.CleanBuffer_inlock()
-	ib.Buffer = append(ib.Buffer, CachedData{imgs, meta})
-}
-
-func (ib *ImageBuffer) CleanBuffer_inlock() {
-	sort.Slice(ib.Buffer, func(i, j int) bool {
-		a := ib.Buffer[i]
-		b := ib.Buffer[j]
-		return a.Meta.CapturedAt.Before(b.Meta.CapturedAt)
-	})
-
-	early := time.Now().Add(-1 * ib.windowDuration())
-	for len(ib.Buffer) > 0 {
-		if ib.Buffer[0].Meta.CapturedAt.After(early) {
-			return
-		}
-	}
 }
 
 func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
