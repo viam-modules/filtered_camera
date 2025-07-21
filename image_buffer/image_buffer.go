@@ -19,6 +19,7 @@ type ImageBuffer struct {
 	recentImages []CachedData  // Upload these if something interesting happens in the near future
 	toSend       []CachedData  // Upload these no matter what
 	captureTill  time.Time
+	captureFrom  time.Time
 }
 
 func (ib *ImageBuffer) windowDuration(windowSeconds int) time.Duration {
@@ -55,18 +56,29 @@ func (ib *ImageBuffer) cleanBuffer(windowSeconds int) {
 	}
 }
 
-func (ib *ImageBuffer) MarkShouldSend(windowSeconds int) {
+func (ib *ImageBuffer) MarkShouldSend(windowSeconds int, windowSecondsBefore int, windowSecondsAfter int) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
-	ib.captureTill = time.Now().Add(ib.windowDuration(windowSeconds))
-	if windowSeconds == 0 && len(ib.recentImages) != 0 {
-		// If windowSeconds is 0, keep the most recent image (the one that triggered this function
-		// call, which we should send) and throw out everything else.
+	// set captureTill and captureFrom
+	now := time.Now()
+	if windowSeconds > 0 {
+		ib.captureTill = now.Add(ib.windowDuration(windowSeconds))
+	} else if windowSecondsBefore > 0 || windowSecondsAfter > 0 {
+		ib.captureFrom = now.Add(-ib.windowDuration((windowSecondsBefore)))
+		ib.captureTill = now.Add(ib.windowDuration(windowSecondsAfter))
+	}
+
+
+	if windowSeconds == 0 && windowSecondsBefore == 0 && windowSecondsAfter == 0 && len(ib.recentImages) != 0 {
+		// If windowSeconds, windowSecondsBefore, and windowSecondsAfter are all 0, keep the most recent 
+		// image (the one that triggered this function call, which we should send) and throw out everything else.
 		ib.toSend = append(ib.toSend, ib.recentImages[len(ib.recentImages)-1])
-	} else {
+	} else if windowSecondsBefore == 0 && windowSecondsAfter == 0 {
 		ib.cleanBuffer(windowSeconds)
 		ib.toSend = append(ib.toSend, ib.recentImages...)
+	} else {
+		
 	}
 	ib.recentImages = []CachedData{}
 }
