@@ -29,6 +29,8 @@ type Config struct {
 	Camera        string `json:"camera"`
 	FilterSvc     string `json:"filter_service"`
 	WindowSeconds int    `json:"window_seconds"`
+	WindowSecondsBefore int `json:"window_seconds_before"`
+	WindowSecondsAfter int `json:"window_seconds_after"`
 }
 
 func (cfg *Config) Validate(path string) ([]string, error) {
@@ -38,6 +40,16 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 
 	if cfg.FilterSvc == "" {
 		return nil, utils.NewConfigValidationFieldRequiredError(path, "filter_service")
+	}
+	
+	if cfg.WindowSeconds > 0 {
+		if cfg.WindowSecondsAfter > 0 || cfg.WindowSecondsBefore > 0 {
+			return nil, errors.Errorf("If window_seconds > 0, then window_seconds_before and window_seconds_after must not be")
+		}
+	} else {
+		if cfg.WindowSecondsAfter <= 0 && cfg.WindowSecondsBefore <= 0 {
+			return nil, errors.Errorf("If window_seconds is not set, either window_seconds_before or window_seconds_after must be")
+		}
 	}
 
 	return []string{cfg.Camera, cfg.FilterSvc}, nil
