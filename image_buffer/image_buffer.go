@@ -74,10 +74,10 @@ func (ib *ImageBuffer) cleanBuffer(windowSeconds int, windowSecondsBefore int, w
 			ib.recentImages = ib.recentImages[1:]
 		}
 	} else if windowSecondsBefore > 0 || windowSecondsAfter > 0 {
-		for ib.recentImages[0].Meta.CapturedAt.Before(ib.captureFrom) && len(ib.recentImages) > 0 {
+		for len(ib.recentImages) > 0 && ib.recentImages[0].Meta.CapturedAt.Before(ib.captureFrom) {
 			ib.recentImages = ib.recentImages[1:]
 		}
-		for ib.recentImages[len(ib.recentImages) - 1].Meta.CapturedAt.After(ib.captureTo) && len(ib.recentImages) > 0 {
+		for len(ib.recentImages) > 0 && ib.recentImages[len(ib.recentImages) - 1].Meta.CapturedAt.After(ib.captureTo) {
 			ib.recentImages = ib.recentImages[:len(ib.recentImages) - 1]
 		}
 		return

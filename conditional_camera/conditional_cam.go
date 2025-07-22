@@ -121,7 +121,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	}
 
 	if filtered_camera.IsFromDataMgmt(ctx, extra) {
-		cc.buf.AddToBuffer(images, meta, cc.conf.WindowSeconds)
+		cc.buf.AddToBuffer(images, meta, cc.conf.WindowSeconds, cc.conf.WindowSecondsBefore, cc.conf.WindowSecondsAfter)
 	} else {
 		return images, meta, nil
 	}
@@ -132,7 +132,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 			return nil, meta, err
 		}
 		if shouldSend {
-			cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
+			cc.buf.MarkShouldSend(cc.conf.WindowSeconds, cc.conf.WindowSecondsBefore, cc.conf.WindowSecondsAfter)
 		}
 	}
 
