@@ -27,6 +27,8 @@ type Config struct {
 	Vision         string
 	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
 	WindowSeconds  int                   `json:"window_seconds"`
+	WindowSecondsBefore int 		     `json:"window_seconds_before"`
+	WindowSecondsAfter int			     `json:"window_seconds_after"`
 
 	Classifications map[string]float64
 	Objects         map[string]float64
@@ -306,7 +308,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	if IsFromDataMgmt(ctx, extra) {
-		fc.buf.AddToBuffer(images, meta, fc.conf.WindowSeconds)
+		fc.buf.AddToBuffer(images, meta, fc.conf.WindowSeconds, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter)
 	} else {
 		return images, meta, nil
 	}
@@ -317,7 +319,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			return nil, meta, err
 		}
 		if shouldSend {
-			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
+			fc.buf.MarkShouldSend(fc.conf.WindowSeconds, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter)
 		}
 	}
 
