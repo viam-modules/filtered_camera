@@ -20,11 +20,11 @@ func TestWindow(t *testing.T) {
 	// Initialize the image buffer
 	buf := NewImageBuffer(10, 1.0)
 
-	buf.SetRingBufferForTesting([]CachedData{
+	buf.ringBuffer = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
-	})
+	}
 
 	buf.MarkShouldSend(time.Now())
 
@@ -35,11 +35,11 @@ func TestWindow(t *testing.T) {
 	test.That(t, b, test.ShouldEqual, toSendSlice[1].Meta.CapturedAt)
 
 	// Reset for second test
-	buf.SetRingBufferForTesting([]CachedData{
+	buf.ringBuffer = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
 		{Meta: resource.ResponseMetadata{CapturedAt: b}},
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
-	})
+	}
 	buf.ClearToSend()
 
 	buf.MarkShouldSend(time.Now())

@@ -166,13 +166,6 @@ func (ib *ImageBuffer) GetToSendSlice() []CachedData {
 	return append([]CachedData{}, ib.toSend...)
 }
 
-// SetRingBufferForTesting allows tests to directly set the ring buffer contents
-func (ib *ImageBuffer) SetRingBufferForTesting(data []CachedData) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-	ib.ringBuffer = data
-}
-
 // StoreImages intelligently stores images either in ToSend buffer (if within CaptureTill time)
 // or in the RingBuffer (if outside CaptureTill time)
 func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.ResponseMetadata, now time.Time) {
