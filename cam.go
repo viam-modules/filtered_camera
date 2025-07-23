@@ -321,10 +321,8 @@ func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
 	now := meta.CapturedAt
 	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
 	// else then store them in the ring buffer
-	if now.Before(fc.buf.CaptureTill) || now.Equal(fc.buf.CaptureTill) {
-		fc.buf.Mu.Lock()
-		fc.buf.ToSend = append(fc.buf.ToSend, imagebuffer.CachedData{Imgs: images, Meta: meta})
-		fc.buf.Mu.Unlock()
+	if now.Before(fc.buf.GetCaptureTill()) || now.Equal(fc.buf.GetCaptureTill()) {
+		fc.buf.AppendToSend(imagebuffer.CachedData{Imgs: images, Meta: meta})
 	} else {
 		fc.buf.AddToRingBuffer(images, meta)
 	}
@@ -369,12 +367,8 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
 			fc.buf.CacheImages(images)
-			fc.buf.Mu.Lock()
-			defer fc.buf.Mu.Unlock()
 
-			if len(fc.buf.ToSend) > 0 {
-				x := fc.buf.ToSend[0]
-				fc.buf.ToSend = fc.buf.ToSend[1:]
+			if x, ok := fc.buf.PopFirstToSend(); ok {
 				return x.Imgs, x.Meta, nil
 			}
 
@@ -382,11 +376,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		}
 	}
 	// background loop will fill ToSend buffer as long as within CaptureTill time
-	fc.buf.Mu.Lock()
-	defer fc.buf.Mu.Unlock()
-	if len(fc.buf.ToSend) > 0 {
-		x := fc.buf.ToSend[0]
-		fc.buf.ToSend = fc.buf.ToSend[1:]
+	if x, ok := fc.buf.PopFirstToSend(); ok {
 		return x.Imgs, x.Meta, nil
 	}
 	return nil, meta, data.ErrNoCaptureToStore

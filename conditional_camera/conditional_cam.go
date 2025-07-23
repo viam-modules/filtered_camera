@@ -136,13 +136,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		}
 	}
 
-	cc.buf.Mu.Lock()
-	defer cc.buf.Mu.Unlock()
-
-
-	if len(cc.buf.ToSend) > 0 {
-		x := cc.buf.ToSend[0]
-		cc.buf.ToSend = cc.buf.ToSend[1:]
+	if x, ok := cc.buf.PopFirstToSend(); ok {
 		return x.Imgs, x.Meta, nil
 	}
 	return nil, meta, data.ErrNoCaptureToStore
