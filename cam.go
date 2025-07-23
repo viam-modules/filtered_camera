@@ -319,13 +319,7 @@ func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
 		return
 	}
 	now := meta.CapturedAt
-	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
-	// else then store them in the ring buffer
-	if now.Before(fc.buf.GetCaptureTill()) || now.Equal(fc.buf.GetCaptureTill()) {
-		fc.buf.AppendToSend(imagebuffer.CachedData{Imgs: images, Meta: meta})
-	} else {
-		fc.buf.AddToRingBuffer(images, meta)
-	}
+	fc.buf.StoreImages(images, meta, now)
 }
 
 func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {

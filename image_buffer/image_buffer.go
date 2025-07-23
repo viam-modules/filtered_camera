@@ -21,14 +21,19 @@ type ImageBuffer struct {
 	lastCached     CachedData
 	windowSeconds  int
 	imageFrequency float64
+	maxImages      int
 }
 
 func NewImageBuffer(windowSeconds int, imageFrequency float64) *ImageBuffer {
+	// Calculate the maximum number of images to keep in the ring buffer
+	// Keep images for 2 * windowSeconds (before and after trigger)
+	maxImages := int(2 * float64(windowSeconds) * imageFrequency)
 	return &ImageBuffer{
 		ringBuffer:     []CachedData{},
 		toSend:         []CachedData{},
 		windowSeconds:  windowSeconds,
 		imageFrequency: imageFrequency,
+		maxImages:      maxImages,
 	}
 }
 
@@ -75,13 +80,9 @@ func (ib *ImageBuffer) AddToRingBuffer(imgs []camera.NamedImage, meta resource.R
 
 	ib.ringBuffer = append(ib.ringBuffer, CachedData{imgs, meta})
 
-	// Calculate the maximum number of images to keep in the ring buffer
-	// Keep images for 2 * windowSeconds (before and after trigger)
-	maxImages := int(2 * float64(ib.windowSeconds) * ib.imageFrequency)
-
 	// Remove oldest images if we exceed the max
-	if len(ib.ringBuffer) > maxImages {
-		ib.ringBuffer = ib.ringBuffer[len(ib.ringBuffer)-maxImages:]
+	if len(ib.ringBuffer) > ib.maxImages {
+		ib.ringBuffer = ib.ringBuffer[len(ib.ringBuffer)-ib.maxImages:]
 	}
 }
 
@@ -170,4 +171,25 @@ func (ib *ImageBuffer) SetRingBufferForTesting(data []CachedData) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 	ib.ringBuffer = data
+}
+
+// StoreImages intelligently stores images either in ToSend buffer (if within CaptureTill time)
+// or in the RingBuffer (if outside CaptureTill time)
+func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.ResponseMetadata, now time.Time) {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+
+	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
+	// else then store them in the ring buffer
+	if now.Before(ib.captureTill) || now.Equal(ib.captureTill) {
+		ib.toSend = append(ib.toSend, CachedData{Imgs: images, Meta: meta})
+	} else {
+		// Add to ring buffer (reuse existing logic)
+		ib.ringBuffer = append(ib.ringBuffer, CachedData{Imgs: images, Meta: meta})
+
+		// Remove oldest images if we exceed the max
+		if len(ib.ringBuffer) > ib.maxImages {
+			ib.ringBuffer = ib.ringBuffer[len(ib.ringBuffer)-ib.maxImages:]
+		}
+	}
 }
