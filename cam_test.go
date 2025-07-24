@@ -564,7 +564,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 		test.That(t, fc.buf.GetToSendSlice()[i].Meta.CapturedAt, test.ShouldEqual, expected)
 	}
 	// Now add images 6-10 leading up to second trigger, and check if only two more images are added
-	// to the two send buffer
+	// to the ToSend buffer
 	expectedFirstTrigger = append(expectedFirstTrigger, baseTime.Add(6*time.Second))
 	expectedFirstTrigger = append(expectedFirstTrigger, baseTime.Add(7*time.Second))
 	for i := 6; i <= 10; i++ {
@@ -598,7 +598,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 		test.That(t, fc.buf.GetToSendSlice()[i].Meta.CapturedAt, test.ShouldEqual, expected)
 	}
 	// Now add images 11 - 15 after trigger, and check if only two more images are added
-	// to the two send buffer
+	// to the ToSend buffer
 	expectedTrigger = append(expectedTrigger, baseTime.Add(11*time.Second))
 	expectedTrigger = append(expectedTrigger, baseTime.Add(12*time.Second))
 	for i := 11; i <= 15; i++ {
