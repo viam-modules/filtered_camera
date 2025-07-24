@@ -36,6 +36,7 @@ On the new component panel, copy and paste the following attribute template into
         }
     ],
     "window_seconds": <time_window_for_capture>,
+    "image_frequency": <capture_rate_of_images_in_buffer>,
 }
 ```
 
@@ -57,8 +58,9 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
 | `vision_services` | list | **Required** | A list of 1 or more vision services used for image classifications or detections. |
 | `vision` | string | **Required** | \*\***DEPRECATED**\*\* The vision service used for image classifications or detections. |
 | `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the N number of seconds preceding the condition being met. |
-| `classifications` | float64 | Optional | \*\***DEPRECATED**\*\* A map of classification labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a classifier. You can find these labels by testing your vision service. |
-| `objects` | float64 | Optional | \*\***DEPRECATED**\*\* A map of object detection labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a detector. You can find these labels by testing your vision service. |
+| `image_frequency` | float64 | Optional | the frequency at which to place images into the buffer (in Hz). Default value is 1.0 Hz |
+| `classifications` | float64 | Optional | \*\***DEPRECATED** Use `vision_services`\*\* A map of classification labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a classifier. You can find these labels by testing your vision service. |
+| `objects` | float64 | Optional | \*\***DEPRECATED** use `vision_services` \*\* A map of object detection labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a detector. You can find these labels by testing your vision service. |
 
 > [!WARNING]
 > If a vision service has no specified classifications and/or objects, it won't trigger any data capture.
@@ -82,7 +84,8 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
             }
         }
     ],
-    "windowSeconds": 5,
+    "window_seconds": 6,
+    "image_frequency": 0.5,
 }
 ```
 
