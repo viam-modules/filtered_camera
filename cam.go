@@ -7,7 +7,6 @@ import (
 	"image"
 	"time"
 
-	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
@@ -17,9 +16,13 @@ import (
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
 	"go.viam.com/utils"
+
+	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 )
 
 var Model = Family.WithModel("filtered-camera")
+
+const defaultImageFreq = 1.0
 
 type Config struct {
 	Camera string
@@ -27,6 +30,7 @@ type Config struct {
 	Vision         string
 	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
 	WindowSeconds  int                   `json:"window_seconds"`
+	ImageFrequency float64               `json:"image_frequency"`
 
 	Classifications map[string]float64
 	Objects         map[string]float64
@@ -57,6 +61,10 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 		return nil, utils.NewConfigValidationFieldRequiredError(path, "vision_services")
 	} else if cfg.Vision != "" && cfg.VisionServices != nil {
 		return nil, utils.NewConfigValidationError(path, errors.New("cannot specify both vision and vision_services"))
+	}
+
+	if cfg.ImageFrequency < 0 {
+		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency cannot be less than 0"))
 	}
 
 	deps := []string{cfg.Camera}
@@ -150,6 +158,21 @@ func init() {
 			fc.acceptedStats.startTime = time.Now()
 			fc.rejectedStats.startTime = time.Now()
 
+			// Initialize the image buffer
+			imageFreq := newConf.ImageFrequency
+			if imageFreq == 0 {
+				imageFreq = defaultImageFreq
+			}
+			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq)
+
+			// Initialize background image capture worker
+			fc.backgroundWorkers = utils.NewStoppableWorkerWithTicker(
+				time.Duration(1000.0/imageFreq)*time.Millisecond,
+				func(ctx context.Context) {
+					fc.captureImageInBackground(ctx)
+				},
+			)
+
 			return fc, nil
 		},
 	})
@@ -157,14 +180,14 @@ func init() {
 
 type filteredCamera struct {
 	resource.AlwaysRebuild
-	resource.TriviallyCloseable
 
 	name   resource.Name
 	conf   *Config
 	logger logging.Logger
 
 	cam                      camera.Camera
-	buf                      imagebuffer.ImageBuffer
+	buf                      *imagebuffer.ImageBuffer
+	backgroundWorkers        *utils.StoppableWorkers
 	inhibitors               []vision.Service
 	otherVisionServices      []vision.Service
 	inhibitedClassifications map[string]map[string]float64
@@ -282,6 +305,23 @@ func (fc *filteredCamera) Name() resource.Name {
 	return fc.name
 }
 
+func (fc *filteredCamera) Close(ctx context.Context) error {
+	if fc.backgroundWorkers != nil {
+		fc.backgroundWorkers.Stop()
+	}
+	return nil
+}
+
+func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
+	images, meta, err := fc.cam.Images(ctx)
+	if err != nil {
+		fc.logger.Debugf("Error capturing image in background: %v", err)
+		return
+	}
+	now := meta.CapturedAt
+	fc.buf.StoreImages(images, meta, now)
+}
+
 func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	return fc.formatStats(), nil
 }
@@ -299,38 +339,44 @@ func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, reso
 	return fc.images(ctx, nil)
 }
 
+// images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
+// It then returns the next image present in the ToSend buffer back to the client / data manager
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	images, meta, err := fc.cam.Images(ctx)
 	if err != nil {
 		return images, meta, err
 	}
 
-	if IsFromDataMgmt(ctx, extra) {
-		fc.buf.AddToBuffer(images, meta, fc.conf.WindowSeconds)
-	} else {
+	if !IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
 
 	for _, img := range images {
-		shouldSend, err := fc.shouldSend(ctx, img.Image)
+		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
+		shouldSend, err := fc.shouldSend(ctx, img.Image, meta.CapturedAt)
 		if err != nil {
 			return nil, meta, err
 		}
 		if shouldSend {
-			fc.buf.MarkShouldSend(fc.conf.WindowSeconds)
+			// this updates the CaptureTill time to be further in the future
+			fc.buf.MarkShouldSend(meta.CapturedAt)
+			fc.buf.CacheImages(images)
+
+			if x, ok := fc.buf.PopFirstToSend(); ok {
+				return x.Imgs, x.Meta, nil
+			}
+
+			return images, meta, nil
 		}
 	}
-
-	x := fc.buf.GetCachedData()
-	if x == nil {
-		return nil, meta, data.ErrNoCaptureToStore
+	// background loop will fill ToSend buffer as long as within CaptureTill time
+	if x, ok := fc.buf.PopFirstToSend(); ok {
+		return x.Imgs, x.Meta, nil
 	}
-	return x.Imgs, x.Meta, nil
+	return nil, meta, data.ErrNoCaptureToStore
 }
 
-// We return whether the classifiers/detectors think this image is interesting
-func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool, error) {
-	fc.logger.Debugf("started shouldSend")
+func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now time.Time) (bool, error) {
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
@@ -395,7 +441,6 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image) (bool
 			}
 		}
 	}
-
 	if len(fc.otherVisionServices) == 0 {
 		fc.acceptedStats.update("no vision services triggered")
 		fc.logger.Debugf("defaulting to true")

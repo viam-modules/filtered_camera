@@ -26,9 +26,10 @@ var (
 )
 
 type Config struct {
-	Camera        string `json:"camera"`
-	FilterSvc     string `json:"filter_service"`
-	WindowSeconds int    `json:"window_seconds"`
+	Camera         string  `json:"camera"`
+	FilterSvc      string  `json:"filter_service"`
+	WindowSeconds  int     `json:"window_seconds"`
+	ImageFrequency float64 `json:"image_frequency"`
 }
 
 func (cfg *Config) Validate(path string) ([]string, error) {
@@ -38,6 +39,10 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 
 	if cfg.FilterSvc == "" {
 		return nil, utils.NewConfigValidationFieldRequiredError(path, "filter_service")
+	}
+
+	if cfg.ImageFrequency < 0 {
+		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency must be greater than 0"))
 	}
 
 	return []string{cfg.Camera, cfg.FilterSvc}, nil
@@ -63,6 +68,13 @@ func init() {
 				return nil, err
 			}
 
+			// Initialize the image buffer
+			imageFreq := newConf.ImageFrequency
+			if imageFreq == 0 {
+				imageFreq = 1.0
+			}
+			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq)
+
 			return cc, nil
 		},
 	})
@@ -78,7 +90,7 @@ type conditionalCamera struct {
 
 	cam     camera.Camera
 	filtSvc resource.Resource
-	buf     imagebuffer.ImageBuffer
+	buf     *imagebuffer.ImageBuffer
 }
 
 func (cc *conditionalCamera) Name() resource.Name {
@@ -109,7 +121,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	}
 
 	if filtered_camera.IsFromDataMgmt(ctx, extra) {
-		cc.buf.AddToBuffer(images, meta, cc.conf.WindowSeconds)
+		cc.buf.AddToRingBuffer(images, meta)
 	} else {
 		return images, meta, nil
 	}
@@ -120,15 +132,14 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 			return nil, meta, err
 		}
 		if shouldSend {
-			cc.buf.MarkShouldSend(cc.conf.WindowSeconds)
+			cc.buf.MarkShouldSend(meta.CapturedAt)
 		}
 	}
 
-	x := cc.buf.GetCachedData()
-	if x == nil {
-		return nil, meta, data.ErrNoCaptureToStore
+	if x, ok := cc.buf.PopFirstToSend(); ok {
+		return x.Imgs, x.Meta, nil
 	}
-	return x.Imgs, x.Meta, nil
+	return nil, meta, data.ErrNoCaptureToStore
 }
 
 func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
