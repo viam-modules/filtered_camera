@@ -98,14 +98,8 @@ func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
 	}
 }
 
-// GetCaptureTill returns the current captureTill time
-func (ib *ImageBuffer) GetCaptureTill() time.Time {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-	return ib.captureTill
-}
-
 // SetCaptureTill sets the captureTill time
+// This method is only used for testing purposes in cam_test.go
 func (ib *ImageBuffer) SetCaptureTill(t time.Time) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
@@ -131,21 +125,8 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	return x, true
 }
 
-// AppendToSend appends a single CachedData to the toSend slice
-func (ib *ImageBuffer) AppendToSend(data CachedData) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-	ib.toSend = append(ib.toSend, data)
-}
-
-// AppendToSendSlice appends a slice of CachedData to the toSend slice
-func (ib *ImageBuffer) AppendToSendSlice(data []CachedData) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-	ib.toSend = append(ib.toSend, data...)
-}
-
 // ClearToSend clears the toSend slice
+// Only used for testing purposes
 func (ib *ImageBuffer) ClearToSend() {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
@@ -153,6 +134,7 @@ func (ib *ImageBuffer) ClearToSend() {
 }
 
 // GetRingBufferLength returns the length of the ringBuffer slice
+// Only used for testing purposes
 func (ib *ImageBuffer) GetRingBufferLength() int {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
@@ -160,6 +142,7 @@ func (ib *ImageBuffer) GetRingBufferLength() int {
 }
 
 // GetToSendSlice returns a copy of the toSend slice for testing
+// Only used for testing purposes
 func (ib *ImageBuffer) GetToSendSlice() []CachedData {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()

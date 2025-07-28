@@ -41,7 +41,7 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 		return nil, utils.NewConfigValidationFieldRequiredError(path, "filter_service")
 	}
 
-	if cfg.ImageFrequency <= 0 {
+	if cfg.ImageFrequency < 0 {
 		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency must be greater than 0"))
 	}
 
