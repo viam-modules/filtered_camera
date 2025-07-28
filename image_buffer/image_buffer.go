@@ -17,36 +17,50 @@ type ImageBuffer struct {
 	mu             sync.Mutex
 	ringBuffer     []CachedData
 	toSend         []CachedData
+	captureFrom    time.Time
 	captureTill    time.Time
 	lastCached     CachedData
-	windowSeconds  int
+	windowSecondsBefore  int
+	windowSecondsAfter 	 int
 	imageFrequency float64
 	maxImages      int
 }
 
-func NewImageBuffer(windowSeconds int, imageFrequency float64) *ImageBuffer {
+func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefore int, windowSecondsAfter int) *ImageBuffer {
 	// Calculate the maximum number of images to keep in the ring buffer
 	// Keep images for 2 * windowSeconds (before and after trigger)
-	maxImages := int(2 * float64(windowSeconds) * imageFrequency)
+	var maxImages int
+	if windowSeconds > 0 {
+		maxImages = int(2 * float64(windowSeconds) * imageFrequency)
+		windowSecondsBefore = windowSeconds
+		windowSecondsAfter = windowSeconds
+	} else if windowSecondsBefore > 0 || windowSecondsAfter > 0 {
+		maxImages = int(float64(windowSecondsBefore + windowSecondsAfter) * imageFrequency)
+	}
 	return &ImageBuffer{
 		ringBuffer:     []CachedData{},
 		toSend:         []CachedData{},
-		windowSeconds:  windowSeconds,
+		windowSecondsBefore:  windowSecondsBefore,
+		windowSecondsAfter: windowSecondsAfter,
 		imageFrequency: imageFrequency,
 		maxImages:      maxImages,
 	}
 }
 
 func (ib *ImageBuffer) windowDuration() time.Duration {
-	return time.Second * time.Duration(ib.windowSeconds)
+	return time.Second * time.Duration(ib.windowSecondsBefore + ib.windowSecondsAfter)
 }
 
 func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
-	ib.captureTill = now.Add(ib.windowDuration())
+	// Add images from the ring buffer that are within the window
+	beforeTimeBoundary := time.Second * time.Duration(ib.windowSecondsBefore)
+	afterTimeBoundary := time.Second * time.Duration(ib.windowSecondsAfter)
 
+	ib.captureFrom = now.Add(-beforeTimeBoundary)
+	ib.captureTill = now.Add(afterTimeBoundary)
 	// Send images from the ring buffer and continue collecting for windowDuration
 	triggerTime := now
 	var imagesToSend []CachedData
@@ -57,12 +71,11 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 		existingTimes[existing.Meta.CapturedAt.UnixNano()] = true
 	}
 
-	// Add images from the ring buffer that are within the window
-	windowDuration := ib.windowDuration()
+	
 	for _, cached := range ib.ringBuffer {
 		timeDiff := triggerTime.Sub(cached.Meta.CapturedAt)
 		// Include images within windowSeconds before and after trigger
-		if timeDiff >= -windowDuration && timeDiff <= windowDuration {
+		if timeDiff >= -beforeTimeBoundary && timeDiff <= afterTimeBoundary {
 			// Check if this image is already in ToSend to avoid duplicates
 			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
 				imagesToSend = append(imagesToSend, cached)
