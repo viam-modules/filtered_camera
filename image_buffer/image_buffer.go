@@ -47,10 +47,6 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 	}
 }
 
-func (ib *ImageBuffer) windowDuration() time.Duration {
-	return time.Second * time.Duration(ib.windowSecondsBefore + ib.windowSecondsAfter)
-}
-
 func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
