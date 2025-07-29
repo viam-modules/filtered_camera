@@ -314,6 +314,32 @@ func TestValidate(t *testing.T) {
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "baz", "foo", "bar"})
+
+	// if WindowSeconds is set, WindowSecondsBefore and WindowSecondsAfter should be 0
+	conf.WindowSeconds = 15
+	conf.WindowSecondsAfter = 10
+	conf.WindowSecondsBefore = 5
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldBeNil)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "if window_seconds is set, window_seconds_before and window_seconds_after must not be")
+
+	// if WindowSeconds is not set (or is 0), WindowSecondsBefore and WindowSecondsAfter can be set
+	conf.WindowSeconds = 0
+	conf.WindowSecondsAfter = 10
+	conf.WindowSecondsBefore = 5
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, err, test.ShouldBeNil)
+
+	// none of the window boundary parameters can be less than 0
+	conf.WindowSeconds = -5
+	conf.WindowSecondsAfter = -10
+	conf.WindowSecondsBefore = -10
+	res, err = conf.Validate(".")
+	test.That(t, res, test.ShouldBeNil)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "one of window_seconds, window_seconds_after, or window_seconds_before can be negative")
 }
 
 func TestImage(t *testing.T) {

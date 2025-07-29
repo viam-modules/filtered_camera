@@ -34,7 +34,7 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		maxImages = int(2 * float64(windowSeconds) * imageFrequency)
 		windowSecondsBefore = windowSeconds
 		windowSecondsAfter = windowSeconds
-	} else if windowSecondsBefore > 0 || windowSecondsAfter > 0 {
+	} else {
 		maxImages = int(float64(windowSecondsBefore + windowSecondsAfter) * imageFrequency)
 	}
 	return &ImageBuffer{
@@ -55,8 +55,12 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	beforeTimeBoundary := time.Second * time.Duration(ib.windowSecondsBefore)
 	afterTimeBoundary := time.Second * time.Duration(ib.windowSecondsAfter)
 
-	ib.captureFrom = now.Add(-beforeTimeBoundary)
-	ib.captureTill = now.Add(afterTimeBoundary)
+	newCaptureFrom := now.Add(-beforeTimeBoundary)
+	newCaptureTill := now.Add(afterTimeBoundary)
+	if ib.captureTill.Before(now) {
+		ib.captureFrom = newCaptureFrom
+	}
+	ib.captureTill = newCaptureTill
 	// Send images from the ring buffer and continue collecting for windowDuration
 	triggerTime := now
 	var imagesToSend []CachedData
