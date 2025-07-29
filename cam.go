@@ -15,6 +15,7 @@ import (
 	"go.viam.com/rdk/services/vision"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
+	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/utils"
 
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
@@ -27,12 +28,12 @@ const defaultImageFreq = 1.0
 type Config struct {
 	Camera string
 	// Deprecated: use VisionServices instead
-	Vision         string
-	VisionServices []VisionServiceConfig `json:"vision_services,omitempty"`
-	WindowSeconds  int                   `json:"window_seconds"`
-	ImageFrequency float64               `json:"image_frequency"`
-	WindowSecondsBefore int				 `json:"window_seconds_before"`
-	WindowSecondsAfter int				 `json:"window_seconds_after"`
+	Vision              string
+	VisionServices      []VisionServiceConfig `json:"vision_services,omitempty"`
+	WindowSeconds       int                   `json:"window_seconds"`
+	ImageFrequency      float64               `json:"image_frequency"`
+	WindowSecondsBefore int                   `json:"window_seconds_before"`
+	WindowSecondsAfter  int                   `json:"window_seconds_after"`
 
 	Classifications map[string]float64
 	Objects         map[string]float64
@@ -54,27 +55,27 @@ func (config *VisionServiceConfig) Validate(path string) error {
 	return nil
 }
 
-func (cfg *Config) Validate(path string) ([]string, error) {
+func (cfg *Config) Validate(path string) ([]string, []string, error) {
 	if cfg.Camera == "" {
-		return nil, utils.NewConfigValidationFieldRequiredError(path, "camera")
+		return nil, nil, utils.NewConfigValidationFieldRequiredError(path, "camera")
 	}
 
 	if cfg.Vision == "" && cfg.VisionServices == nil {
-		return nil, utils.NewConfigValidationFieldRequiredError(path, "vision_services")
+		return nil, nil, utils.NewConfigValidationFieldRequiredError(path, "vision_services")
 	} else if cfg.Vision != "" && cfg.VisionServices != nil {
-		return nil, utils.NewConfigValidationError(path, errors.New("cannot specify both vision and vision_services"))
+		return nil, nil, utils.NewConfigValidationError(path, errors.New("cannot specify both vision and vision_services"))
 	}
 
 	if cfg.ImageFrequency < 0 {
-		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency cannot be less than 0"))
+		return nil, nil, utils.NewConfigValidationError(path, errors.New("image_frequency cannot be less than 0"))
 	}
 
 	if cfg.WindowSeconds < 0 || cfg.WindowSecondsBefore < 0 || cfg.WindowSecondsAfter < 0 {
-		return nil, utils.NewConfigValidationError(path,
+		return nil, nil, utils.NewConfigValidationError(path,
 			errors.New("none of window_seconds, window_seconds_after, or window_seconds_before can be negative"))
 	} else if cfg.WindowSeconds > 0 && (cfg.WindowSecondsBefore > 0 || cfg.WindowSecondsAfter > 0) {
-			return nil, utils.NewConfigValidationError(path,
-				errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
+		return nil, nil, utils.NewConfigValidationError(path,
+			errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
 	}
 
 	deps := []string{cfg.Camera}
@@ -88,7 +89,7 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	} else {
 		for idx, vs := range cfg.VisionServices {
 			if err := vs.Validate(fmt.Sprintf("%s.%s.%d", path, "vision-service", idx)); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if vs.Inhibit {
 				inhibitors = append(inhibitors, vs.Vision)
@@ -101,7 +102,7 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	deps = append(deps, inhibitors...)
 	deps = append(deps, otherVisionServices...)
 
-	return deps, nil
+	return deps, nil, nil
 }
 
 func init() {
@@ -463,6 +464,10 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 
 func (fc *filteredCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
 	return nil, fmt.Errorf("filteredCamera doesn't support pointclouds yes")
+}
+
+func (fc *filteredCamera) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {
+	return nil, nil
 }
 
 func (fc *filteredCamera) Properties(ctx context.Context) (camera.Properties, error) {

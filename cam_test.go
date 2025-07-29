@@ -230,18 +230,18 @@ func TestValidate(t *testing.T) {
 		ImageFrequency:  1.0,
 	}
 
-	res, err := conf.Validate(".")
+	res, _, err := conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"camera\" is required")
 	conf.Camera = "foo"
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"vision_services\" is required")
 
 	conf.Vision = "foo"
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -257,7 +257,7 @@ func TestValidate(t *testing.T) {
 			Objects: map[string]float64{"b": .8},
 		},
 	}
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot specify both vision and vision_services")
@@ -265,7 +265,7 @@ func TestValidate(t *testing.T) {
 	// when vision is empty and vision_services is set, it should not error
 	// and return the camera and vision service names
 	conf.Vision = ""
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo", "bar"})
@@ -278,7 +278,7 @@ func TestValidate(t *testing.T) {
 			Objects:         map[string]float64{"a": .8},
 		},
 	}
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -290,7 +290,7 @@ func TestValidate(t *testing.T) {
 			Vision: "foo",
 		},
 	}
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -310,7 +310,7 @@ func TestValidate(t *testing.T) {
 			Inhibit: true,
 		},
 	}
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "baz", "foo", "bar"})
@@ -319,7 +319,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = 15
 	conf.WindowSecondsAfter = 10
 	conf.WindowSecondsBefore = 5
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "if window_seconds is set, window_seconds_before and window_seconds_after must not be")
@@ -328,7 +328,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = 0
 	conf.WindowSecondsAfter = 10
 	conf.WindowSecondsBefore = 5
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 
@@ -336,7 +336,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = -5
 	conf.WindowSecondsAfter = -10
 	conf.WindowSecondsBefore = -10
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "one of window_seconds, window_seconds_after, or window_seconds_before can be negative")
