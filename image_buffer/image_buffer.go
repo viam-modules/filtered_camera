@@ -170,7 +170,7 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 
 	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
 	// else then store them in the ring buffer
-	if now.Before(ib.captureTill) || now.Equal(ib.captureTill) {
+	if (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom) {
 		ib.toSend = append(ib.toSend, CachedData{Imgs: images, Meta: meta})
 	} else {
 		// Add to ring buffer (reuse existing logic)
