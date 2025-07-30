@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.viam.com/rdk/components/camera"
+	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 )
 
@@ -48,12 +49,16 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 }
 
 func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
+	logger := logging.NewDebugLogger("client")
+
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
 	// Add images from the ring buffer that are within the window
 	beforeTimeBoundary := time.Second * time.Duration(ib.windowSecondsBefore)
 	afterTimeBoundary := time.Second * time.Duration(ib.windowSecondsAfter)
+	logger.Debugf("beforeTimeBoundary", beforeTimeBoundary.String())
+	logger.Debugf("afterTimeBoundary", afterTimeBoundary.String())
 
 	newCaptureFrom := now.Add(-beforeTimeBoundary)
 	newCaptureTill := now.Add(afterTimeBoundary)
@@ -61,8 +66,10 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 		ib.captureFrom = newCaptureFrom
 	}
 	ib.captureTill = newCaptureTill
+	logger.Debugf("captureFrom", ib.captureFrom.String())
+	logger.Debugf("captureTill", ib.captureTill.String())
 	// Send images from the ring buffer and continue collecting for windowDuration
-	triggerTime := now
+	// triggerTime := now
 	var imagesToSend []CachedData
 
 	// Create a map of existing timestamps in ToSend for O(1) lookup
@@ -72,9 +79,11 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	}
 
 	for _, cached := range ib.ringBuffer {
-		timeDiff := triggerTime.Sub(cached.Meta.CapturedAt)
+		// timeDiff := triggerTime.Sub(cached.Meta.CapturedAt)
 		// Include images within windowSeconds before and after trigger
-		if timeDiff >= -beforeTimeBoundary && timeDiff <= afterTimeBoundary {
+		// logger.Debugf("timeDiff", timeDiff.String())
+		logger.Debugf("cached.Meta.CapturedAt", cached.Meta.CapturedAt.String())
+		if !cached.Meta.CapturedAt.Before(ib.captureFrom) && !cached.Meta.CapturedAt.After(ib.captureTill) {
 			// Check if this image is already in ToSend to avoid duplicates
 			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
 				imagesToSend = append(imagesToSend, cached)
