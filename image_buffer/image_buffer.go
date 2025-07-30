@@ -14,16 +14,16 @@ type CachedData struct {
 }
 
 type ImageBuffer struct {
-	mu             sync.Mutex
-	ringBuffer     []CachedData
-	toSend         []CachedData
-	captureFrom    time.Time
-	captureTill    time.Time
-	lastCached     CachedData
-	windowSecondsBefore  int
-	windowSecondsAfter 	 int
-	imageFrequency float64
-	maxImages      int
+	mu                  sync.Mutex
+	ringBuffer          []CachedData
+	toSend              []CachedData
+	captureFrom         time.Time
+	captureTill         time.Time
+	lastCached          CachedData
+	windowSecondsBefore int
+	windowSecondsAfter  int
+	imageFrequency      float64
+	maxImages           int
 }
 
 func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefore int, windowSecondsAfter int) *ImageBuffer {
@@ -35,15 +35,15 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		windowSecondsBefore = windowSeconds
 		windowSecondsAfter = windowSeconds
 	} else {
-		maxImages = int(float64(windowSecondsBefore + windowSecondsAfter) * imageFrequency)
+		maxImages = int(float64(windowSecondsBefore+windowSecondsAfter) * imageFrequency)
 	}
 	return &ImageBuffer{
-		ringBuffer:     []CachedData{},
-		toSend:         []CachedData{},
-		windowSecondsBefore:  windowSecondsBefore,
-		windowSecondsAfter: windowSecondsAfter,
-		imageFrequency: imageFrequency,
-		maxImages:      maxImages,
+		ringBuffer:          []CachedData{},
+		toSend:              []CachedData{},
+		windowSecondsBefore: windowSecondsBefore,
+		windowSecondsAfter:  windowSecondsAfter,
+		imageFrequency:      imageFrequency,
+		maxImages:           maxImages,
 	}
 }
 
@@ -71,7 +71,6 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 		existingTimes[existing.Meta.CapturedAt.UnixNano()] = true
 	}
 
-	
 	for _, cached := range ib.ringBuffer {
 		timeDiff := triggerTime.Sub(cached.Meta.CapturedAt)
 		// Include images within windowSeconds before and after trigger
