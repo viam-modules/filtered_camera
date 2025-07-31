@@ -14,41 +14,56 @@ type CachedData struct {
 }
 
 type ImageBuffer struct {
-	mu             sync.Mutex
-	ringBuffer     []CachedData
-	toSend         []CachedData
-	captureTill    time.Time
-	lastCached     CachedData
-	windowSeconds  int
-	imageFrequency float64
-	maxImages      int
+	mu                  sync.Mutex
+	ringBuffer          []CachedData
+	toSend              []CachedData
+	captureFrom         time.Time
+	captureTill         time.Time
+	lastCached          CachedData
+	windowSecondsBefore int
+	windowSecondsAfter  int
+	imageFrequency      float64
+	maxImages           int
 }
 
-func NewImageBuffer(windowSeconds int, imageFrequency float64) *ImageBuffer {
+func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefore int, windowSecondsAfter int) *ImageBuffer {
 	// Calculate the maximum number of images to keep in the ring buffer
 	// Keep images for 2 * windowSeconds (before and after trigger)
-	maxImages := int(2 * float64(windowSeconds) * imageFrequency)
-	return &ImageBuffer{
-		ringBuffer:     []CachedData{},
-		toSend:         []CachedData{},
-		windowSeconds:  windowSeconds,
-		imageFrequency: imageFrequency,
-		maxImages:      maxImages,
+	var maxImages int
+	if windowSeconds > 0 {
+		maxImages = int(2 * float64(windowSeconds) * imageFrequency)
+		windowSecondsBefore = windowSeconds
+		windowSecondsAfter = windowSeconds
+	} else {
+		maxImages = int(float64(windowSecondsBefore+windowSecondsAfter) * imageFrequency)
 	}
-}
-
-func (ib *ImageBuffer) windowDuration() time.Duration {
-	return time.Second * time.Duration(ib.windowSeconds)
+	return &ImageBuffer{
+		ringBuffer:          []CachedData{},
+		toSend:              []CachedData{},
+		windowSecondsBefore: windowSecondsBefore,
+		windowSecondsAfter:  windowSecondsAfter,
+		imageFrequency:      imageFrequency,
+		maxImages:           maxImages,
+	}
 }
 
 func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
-	ib.captureTill = now.Add(ib.windowDuration())
+	// Add images from the ring buffer that are within the window
+	beforeTimeBoundary := time.Second * time.Duration(ib.windowSecondsBefore)
+	afterTimeBoundary := time.Second * time.Duration(ib.windowSecondsAfter)
+
+	newCaptureFrom := now.Add(-beforeTimeBoundary)
+	newCaptureTill := now.Add(afterTimeBoundary)
+	// If we are in the middle of capturing new images, we want to keep the left boundary, i.e. the old captureFrom's value
+	if ib.captureTill.Before(now) {
+		ib.captureFrom = newCaptureFrom
+	}
+	ib.captureTill = newCaptureTill
 
 	// Send images from the ring buffer and continue collecting for windowDuration
-	triggerTime := now
 	var imagesToSend []CachedData
 
 	// Create a map of existing timestamps in ToSend for O(1) lookup
@@ -57,12 +72,9 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 		existingTimes[existing.Meta.CapturedAt.UnixNano()] = true
 	}
 
-	// Add images from the ring buffer that are within the window
-	windowDuration := ib.windowDuration()
 	for _, cached := range ib.ringBuffer {
-		timeDiff := triggerTime.Sub(cached.Meta.CapturedAt)
-		// Include images within windowSeconds before and after trigger
-		if timeDiff >= -windowDuration && timeDiff <= windowDuration {
+		// Include images within captureFrom and captureTill boundaries, inclusive. Thus we have the not symbol here.
+		if !cached.Meta.CapturedAt.Before(ib.captureFrom) && !cached.Meta.CapturedAt.After(ib.captureTill) {
 			// Check if this image is already in ToSend to avoid duplicates
 			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
 				imagesToSend = append(imagesToSend, cached)
@@ -157,7 +169,7 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 
 	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
 	// else then store them in the ring buffer
-	if now.Before(ib.captureTill) || now.Equal(ib.captureTill) {
+	if (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom) {
 		ib.toSend = append(ib.toSend, CachedData{Imgs: images, Meta: meta})
 	} else {
 		// Add to ring buffer (reuse existing logic)

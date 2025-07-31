@@ -14,7 +14,7 @@ import (
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/generic"
-
+	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/utils"
 
 	"github.com/viam-modules/filtered_camera"
@@ -26,26 +26,36 @@ var (
 )
 
 type Config struct {
-	Camera         string  `json:"camera"`
-	FilterSvc      string  `json:"filter_service"`
-	WindowSeconds  int     `json:"window_seconds"`
-	ImageFrequency float64 `json:"image_frequency"`
+	Camera              string  `json:"camera"`
+	FilterSvc           string  `json:"filter_service"`
+	WindowSeconds       int     `json:"window_seconds"`
+	ImageFrequency      float64 `json:"image_frequency"`
+	WindowSecondsBefore int     `json:"window_seconds_before"`
+	WindowSecondsAfter  int     `json:"window_seconds_after"`
 }
 
-func (cfg *Config) Validate(path string) ([]string, error) {
+func (cfg *Config) Validate(path string) ([]string, []string, error) {
 	if cfg.Camera == "" {
-		return nil, utils.NewConfigValidationFieldRequiredError(path, "camera")
+		return nil, nil, utils.NewConfigValidationFieldRequiredError(path, "camera")
 	}
 
 	if cfg.FilterSvc == "" {
-		return nil, utils.NewConfigValidationFieldRequiredError(path, "filter_service")
+		return nil, nil, utils.NewConfigValidationFieldRequiredError(path, "filter_service")
 	}
 
 	if cfg.ImageFrequency < 0 {
-		return nil, utils.NewConfigValidationError(path, errors.New("image_frequency must be greater than 0"))
+		return nil, nil, utils.NewConfigValidationError(path, errors.New("image_frequency must be greater than 0"))
 	}
 
-	return []string{cfg.Camera, cfg.FilterSvc}, nil
+	if cfg.WindowSeconds < 0 || cfg.WindowSecondsBefore < 0 || cfg.WindowSecondsAfter < 0 {
+		return nil, nil, utils.NewConfigValidationError(path,
+			errors.New("none of window_seconds, window_seconds_after, or window_seconds_before can be negative"))
+	} else if cfg.WindowSeconds > 0 && (cfg.WindowSecondsBefore > 0 || cfg.WindowSecondsAfter > 0) {
+			return nil, nil, utils.NewConfigValidationError(path,
+				errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
+	}
+
+	return []string{cfg.Camera, cfg.FilterSvc}, nil, nil
 }
 
 func init() {
@@ -73,7 +83,7 @@ func init() {
 			if imageFreq == 0 {
 				imageFreq = 1.0
 			}
-			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq)
+			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter)
 
 			return cc, nil
 		},
@@ -160,4 +170,8 @@ func (cc *conditionalCamera) Properties(ctx context.Context) (camera.Properties,
 		p.SupportsPCD = false
 	}
 	return p, err
+}
+
+func (cc *conditionalCamera) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {
+	return nil, errors.New("unimplemented")
 }

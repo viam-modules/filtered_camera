@@ -79,7 +79,7 @@ func TestShouldSend(t *testing.T) {
 		},
 		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
 		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
-		buf:                     imagebuffer.NewImageBuffer(10, 1.0),
+		buf:                     imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
 	}
 
 	res, err := fc.shouldSend(context.Background(), d, time.Now())
@@ -230,18 +230,18 @@ func TestValidate(t *testing.T) {
 		ImageFrequency:  1.0,
 	}
 
-	res, err := conf.Validate(".")
+	res, _, err := conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"camera\" is required")
 	conf.Camera = "foo"
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"vision_services\" is required")
 
 	conf.Vision = "foo"
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -257,7 +257,7 @@ func TestValidate(t *testing.T) {
 			Objects: map[string]float64{"b": .8},
 		},
 	}
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot specify both vision and vision_services")
@@ -265,7 +265,7 @@ func TestValidate(t *testing.T) {
 	// when vision is empty and vision_services is set, it should not error
 	// and return the camera and vision service names
 	conf.Vision = ""
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo", "bar"})
@@ -278,7 +278,7 @@ func TestValidate(t *testing.T) {
 			Objects:         map[string]float64{"a": .8},
 		},
 	}
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -290,7 +290,7 @@ func TestValidate(t *testing.T) {
 			Vision: "foo",
 		},
 	}
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -310,10 +310,36 @@ func TestValidate(t *testing.T) {
 			Inhibit: true,
 		},
 	}
-	res, err = conf.Validate(".")
+	res, _,  err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "baz", "foo", "bar"})
+
+	// if WindowSeconds is set, WindowSecondsBefore and WindowSecondsAfter should be 0
+	conf.WindowSeconds = 15
+	conf.WindowSecondsAfter = 10
+	conf.WindowSecondsBefore = 5
+	res, _,  err = conf.Validate(".")
+	test.That(t, res, test.ShouldBeNil)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "if window_seconds is set, window_seconds_before and window_seconds_after must not be")
+
+	// if WindowSeconds is not set (or is 0), WindowSecondsBefore and WindowSecondsAfter can be set
+	conf.WindowSeconds = 0
+	conf.WindowSecondsAfter = 10
+	conf.WindowSecondsBefore = 5
+	res, _,  err = conf.Validate(".")
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, err, test.ShouldBeNil)
+
+	// none of the window boundary parameters can be less than 0
+	conf.WindowSeconds = -5
+	conf.WindowSecondsAfter = -10
+	conf.WindowSecondsBefore = -10
+	res, _,  err = conf.Validate(".")
+	test.That(t, res, test.ShouldBeNil)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "one of window_seconds, window_seconds_after, or window_seconds_before can be negative")
 }
 
 func TestImage(t *testing.T) {
@@ -330,7 +356,7 @@ func TestImage(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -381,7 +407,7 @@ func TestImages(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
@@ -425,7 +451,7 @@ func TestProperties(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
 		cam: &inject.Camera{
 			PropertiesFunc: func(ctx context.Context) (camera.Properties, error) {
 				return properties, nil
@@ -451,7 +477,7 @@ func TestDoCommand(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -539,7 +565,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 
 	// Use a base time that's close to current time to make windows work
 	// Initialize the image buffer
-	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency)
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0)
 
 	// First, add images at times 1, 2, 3, 4, 5
 	for i := 1; i <= 5; i++ {
@@ -654,7 +680,7 @@ func TestMultipleTriggerWindows(t *testing.T) {
 
 	// Use a base time that's close to current time to make windows work
 	// Initialize the image buffer
-	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency)
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0)
 
 	// First, add images at times 1, 2, 3, 4, 5
 	for i := 1; i <= 5; i++ {
