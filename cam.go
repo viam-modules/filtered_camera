@@ -467,7 +467,7 @@ func (fc *filteredCamera) NextPointCloud(ctx context.Context) (pointcloud.PointC
 }
 
 func (fc *filteredCamera) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {
-	return nil, nil
+	return nil, errors.New("unimplemented")
 }
 
 func (fc *filteredCamera) Properties(ctx context.Context) (camera.Properties, error) {

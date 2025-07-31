@@ -173,5 +173,5 @@ func (cc *conditionalCamera) Properties(ctx context.Context) (camera.Properties,
 }
 
 func (cc *conditionalCamera) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {
-	return nil, nil
+	return nil, errors.New("unimplemented")
 }
