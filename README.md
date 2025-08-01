@@ -12,6 +12,7 @@ This allows you to:
 - Look for objects in an image and sync the images that have a certain object
 
 This module also allows you to specify a time window for syncing the data captured in the N seconds before the capture criteria were met.
+You are also able to customize the time before and the time after the capture criteria, if you need that level of specficity.
 
 To add the filtered camera to your machine, navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
 Add `camera` / `filtered-camera` to your machine.
@@ -36,6 +37,8 @@ On the new component panel, copy and paste the following attribute template into
         }
     ],
     "window_seconds": <time_window_for_capture>,
+    "window_seconds_before": <time_window_for_capture_before>,
+    "window_seconds_after": <time_window_for_capture_after>,
     "image_frequency": <capture_rate_of_images_in_buffer>,
 }
 ```
@@ -57,7 +60,9 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
 | `camera` | string | **Required** | The name of the camera to filter images for. |
 | `vision_services` | list | **Required** | A list of 1 or more vision services used for image classifications or detections. |
 | `vision` | string | **Required** | \*\***DEPRECATED**\*\* The vision service used for image classifications or detections. |
-| `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the N number of seconds preceding the condition being met. |
+| `window_seconds_before` | float64 | Optional | The size of the time window (in seconds) before the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds preceding the condition being met. |
+| `window_seconds_after` | float64 | Optional | The size of the time window (in seconds) after the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds after the condition being met. |
+| `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the specified number of seconds preceding and after the condition being met. If this value is set, the 'window_seconds_before' and 'window_seconds_after' variable must both be set to 0.0. |
 | `image_frequency` | float64 | Optional | the frequency at which to place images into the buffer (in Hz). Default value is 1.0 Hz |
 | `classifications` | float64 | Optional | \*\***DEPRECATED** Use `vision_services`\*\* A map of classification labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a classifier. You can find these labels by testing your vision service. |
 | `objects` | float64 | Optional | \*\***DEPRECATED** use `vision_services` \*\* A map of object detection labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a detector. You can find these labels by testing your vision service. |
@@ -127,7 +132,9 @@ The following attributes are available for `viam:camera:conditional-camera` base
 | ---- | ------ | ------------ | ----------- |
 | `camera` | string | **Required** | The name of the camera to filter images for. |
 | `filter_service` | string | **Required** | The generic filter service used to determine whether to filter the image. |
-| `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the N number of seconds preceding the condition being met. |
+| `window_seconds_before` | float64 | Optional | The size of the time window (in seconds) before the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds preceding the condition being met. |
+| `window_seconds_after` | float64 | Optional | The size of the time window (in seconds) after the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds after the condition being met. |
+| `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the specified number of seconds preceding and after the condition being met. If this value is set, the 'window_seconds_before' and 'window_seconds_after' variable must both be set to 0.0. |
 
 On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box.
 
@@ -135,7 +142,9 @@ On the new component panel, copy and paste the following attribute template into
 {
     "camera": "<your_camera_name>",
     "filter_service": "<your_vision_service_name>",
-    "window_seconds": <time_window_for_capture>
+    "window_seconds": <time_window_for_capture>,
+    "window_seconds_before": <time_window_for_capture_before>,
+    "window_seconds_after": <time_window_for_capture_after>
 }
 ```
 
@@ -148,7 +157,8 @@ On the new component panel, copy and paste the following attribute template into
 {
     "camera": "my_camera",
     "filter_service": "is_too_hot",
-    "windowSeconds": 3
+    "window_seconds_before": 3,
+    "window_seconds_after": 7,
 }
 ```
 
