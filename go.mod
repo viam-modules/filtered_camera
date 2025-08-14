@@ -6,7 +6,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	go.viam.com/rdk v0.86.1
 	go.viam.com/test v1.2.4
-	go.viam.com/utils v0.1.153
+	go.viam.com/utils v0.1.154
 )
 
 require (
@@ -59,6 +59,7 @@ require (
 	github.com/go-latex/latex v0.0.0-20230307184459-12ec69307ad9 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-pdf/fpdf v0.6.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/goccy/go-graphviz v0.1.3 // indirect
@@ -97,6 +98,7 @@ require (
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/lmittmann/ppm v1.0.2 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/miekg/dns v1.1.53 // indirect
@@ -123,15 +125,20 @@ require (
 	github.com/pion/turn/v2 v2.1.6 // indirect
 	github.com/pion/webrtc/v3 v3.2.36 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/samber/lo v1.51.0 // indirect
 	github.com/sergi/go-diff v1.3.1 // indirect
+	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
+	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/srikrsna/protoc-gen-gotag v0.6.2 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
+	github.com/tklauser/go-sysconf v0.3.12 // indirect
+	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/viamrobotics/ice/v2 v2.3.39 // indirect
 	github.com/viamrobotics/webrtc/v3 v3.99.16 // indirect
@@ -143,6 +150,7 @@ require (
 	github.com/xfmoulet/qoi v0.2.0 // indirect
 	github.com/xtgo/set v1.0.0 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
+	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zhuyie/golzf v0.0.0-20161112031142-8387b0307ade // indirect
 	github.com/zitadel/oidc/v3 v3.37.0 // indirect
 	github.com/zitadel/schema v1.3.1 // indirect
@@ -159,7 +167,7 @@ require (
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	go.viam.com/api v0.1.455 // indirect
+	go.viam.com/api v0.1.462 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230525183740-e7c30c78aeb2 // indirect
 	goji.io v2.0.2+incompatible // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
@@ -193,3 +201,5 @@ require (
 	periph.io/x/conn/v3 v3.7.0 // indirect
 	periph.io/x/host/v3 v3.8.1-0.20230331112814-9f0d9f7d76db // indirect
 )
+
+replace go.viam.com/rdk => ../sean-rdk

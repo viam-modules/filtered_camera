@@ -13,9 +13,9 @@ import (
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
+	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
-	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/utils"
 
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
@@ -324,7 +324,7 @@ func (fc *filteredCamera) Close(ctx context.Context) error {
 }
 
 func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
-	images, meta, err := fc.cam.Images(ctx)
+	images, meta, err := fc.cam.Images(ctx, nil)
 	if err != nil {
 		fc.logger.Debugf("Error capturing image in background: %v", err)
 		return
@@ -346,14 +346,14 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 	return ImagesToImage(ctx, ni, mimeType)
 }
 
-func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return fc.images(ctx, nil)
+func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	return fc.images(ctx, extra)
 }
 
 // images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
 // It then returns the next image present in the ToSend buffer back to the client / data manager
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := fc.cam.Images(ctx)
+	images, meta, err := fc.cam.Images(ctx, extra)
 	if err != nil {
 		return images, meta, err
 	}

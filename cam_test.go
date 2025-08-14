@@ -235,13 +235,13 @@ func TestValidate(t *testing.T) {
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"camera\" is required")
 	conf.Camera = "foo"
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"vision_services\" is required")
 
 	conf.Vision = "foo"
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -257,7 +257,7 @@ func TestValidate(t *testing.T) {
 			Objects: map[string]float64{"b": .8},
 		},
 	}
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot specify both vision and vision_services")
@@ -265,7 +265,7 @@ func TestValidate(t *testing.T) {
 	// when vision is empty and vision_services is set, it should not error
 	// and return the camera and vision service names
 	conf.Vision = ""
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo", "bar"})
@@ -278,7 +278,7 @@ func TestValidate(t *testing.T) {
 			Objects:         map[string]float64{"a": .8},
 		},
 	}
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -290,7 +290,7 @@ func TestValidate(t *testing.T) {
 			Vision: "foo",
 		},
 	}
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -310,7 +310,7 @@ func TestValidate(t *testing.T) {
 			Inhibit: true,
 		},
 	}
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "baz", "foo", "bar"})
@@ -319,7 +319,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = 15
 	conf.WindowSecondsAfter = 10
 	conf.WindowSecondsBefore = 5
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "if window_seconds is set, window_seconds_before and window_seconds_after must not be")
@@ -328,7 +328,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = 0
 	conf.WindowSecondsAfter = 10
 	conf.WindowSecondsBefore = 5
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 
@@ -336,7 +336,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = -5
 	conf.WindowSecondsAfter = -10
 	conf.WindowSecondsBefore = -10
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "one of window_seconds, window_seconds_after, or window_seconds_before can be negative")
@@ -358,7 +358,7 @@ func TestImage(t *testing.T) {
 		},
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
 		cam: &inject.Camera{
-			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+			ImagesFunc: func(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
 					{Image: a, SourceName: ""},
 					{Image: b, SourceName: ""},
@@ -409,7 +409,7 @@ func TestImages(t *testing.T) {
 		},
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
 		cam: &inject.Camera{
-			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+			ImagesFunc: func(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
 			},
 		},
@@ -420,7 +420,7 @@ func TestImages(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
-	res, meta, err := fc.Images(ctx)
+	res, meta, err := fc.Images(ctx, nil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldNotBeNil)
 
@@ -479,7 +479,7 @@ func TestDoCommand(t *testing.T) {
 		},
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
 		cam: &inject.Camera{
-			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+			ImagesFunc: func(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
 					{Image: a, SourceName: ""},
 					{Image: b, SourceName: ""},
@@ -535,7 +535,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 	// after each other
 	imagesCam := inject.NewCamera("test_camera")
 	timeCount := 0 // inital time
-	imagesCam.ImagesFunc = func(ctx context.Context) (
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
 		[]camera.NamedImage, resource.ResponseMetadata, error) {
 		timeCount++
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
@@ -650,7 +650,7 @@ func TestMultipleTriggerWindows(t *testing.T) {
 	// after each other
 	imagesCam := inject.NewCamera("test_camera")
 	timeCount := 0 // inital time
-	imagesCam.ImagesFunc = func(ctx context.Context) (
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
 		[]camera.NamedImage, resource.ResponseMetadata, error) {
 		timeCount++
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
@@ -719,4 +719,49 @@ func TestMultipleTriggerWindows(t *testing.T) {
 	for i, expected := range expectedTrigger {
 		test.That(t, fc.buf.GetToSendSlice()[i].Meta.CapturedAt, test.ShouldEqual, expected)
 	}
+}
+
+func TestImagesWithExtraParamFilters(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+
+	namedImages := []camera.NamedImage{
+		{Image: a, SourceName: ""},
+		{Image: b, SourceName: ""},
+		{Image: c, SourceName: ""},
+	}
+
+	timestamp := time.Now()
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications: map[string]float64{"a": .8},
+			Objects:         map[string]float64{"b": .8},
+			WindowSeconds:   10,
+			ImageFrequency:  1.0,
+		},
+		logger: logger,
+		otherVisionServices: []vision.Service{
+			getDummyVisionService(),
+		},
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
+		cam: &inject.Camera{
+			ImagesFunc: func(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
+			},
+		},
+		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
+		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
+	}
+
+	ctx := context.Background()
+	// Do not set data.FromDMContextKey in ctx; use extra to signal DM instead
+	extra := map[string]interface{}{data.FromDMString: true}
+
+	res, meta, err := fc.Images(ctx, extra)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, len(res), test.ShouldEqual, 3)
+	test.That(t, res, test.ShouldResemble, namedImages)
+	test.That(t, meta, test.ShouldNotBeNil)
+	test.That(t, meta.CapturedAt, test.ShouldResemble, timestamp)
 }

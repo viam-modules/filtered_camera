@@ -51,8 +51,8 @@ func (cfg *Config) Validate(path string) ([]string, []string, error) {
 		return nil, nil, utils.NewConfigValidationError(path,
 			errors.New("none of window_seconds, window_seconds_after, or window_seconds_before can be negative"))
 	} else if cfg.WindowSeconds > 0 && (cfg.WindowSecondsBefore > 0 || cfg.WindowSecondsAfter > 0) {
-			return nil, nil, utils.NewConfigValidationError(path,
-				errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
+		return nil, nil, utils.NewConfigValidationError(path,
+			errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
 	}
 
 	return []string{cfg.Camera, cfg.FilterSvc}, nil, nil
@@ -120,12 +120,12 @@ func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra m
 	return filtered_camera.ImagesToImage(ctx, ni, mimeType)
 }
 
-func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+func (cc *conditionalCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return cc.images(ctx, nil)
 }
 
 func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := cc.cam.Images(ctx)
+	images, meta, err := cc.cam.Images(ctx, extra)
 	if err != nil {
 		return images, meta, err
 	}
