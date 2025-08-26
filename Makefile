@@ -36,7 +36,7 @@ test:
 	go test ./...
 
 lint:
-	actionlint
+	go run github.com/rhysd/actionlint/cmd/actionlint@latest
 
 all: module test
 
