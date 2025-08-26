@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.viam.com/rdk/components/camera"
+	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 )
 
@@ -24,9 +25,13 @@ type ImageBuffer struct {
 	windowSecondsAfter  int
 	imageFrequency      float64
 	maxImages           int
+	logger              logging.Logger
+	debug               bool
+	// toSendMaxWarningThreshold is the threshold for warning about ToSend buffer size
+	toSendMaxWarningThreshold int
 }
 
-func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefore int, windowSecondsAfter int) *ImageBuffer {
+func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefore int, windowSecondsAfter int, logger logging.Logger, debug bool) *ImageBuffer {
 	// Calculate the maximum number of images to keep in the ring buffer
 	// Keep images for 2 * windowSeconds (before and after trigger)
 	var maxImages int
@@ -44,6 +49,10 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		windowSecondsAfter:  windowSecondsAfter,
 		imageFrequency:      imageFrequency,
 		maxImages:           maxImages,
+		logger:              logger,
+		debug:               debug,
+		// Set warning threshold to 2x expected buffer size to detect when consumption is lagging
+		toSendMaxWarningThreshold: maxImages * 2,
 	}
 }
 
@@ -84,6 +93,19 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 
 	// Add the images to send
 	ib.toSend = append(ib.toSend, imagesToSend...)
+	
+	// Log ToSend buffer size (only if debug enabled)
+	toSendLen := len(ib.toSend)
+	if ib.debug {
+		ib.logger.Debugf("MarkShouldSend: added %d images to ToSend buffer, total ToSend size: %d, RingBuffer size: %d", 
+			len(imagesToSend), toSendLen, len(ib.ringBuffer))
+	}
+	
+	// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
+	if toSendLen > ib.toSendMaxWarningThreshold {
+		ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.", 
+			toSendLen, ib.toSendMaxWarningThreshold)
+	}
 }
 
 func (ib *ImageBuffer) AddToRingBuffer(imgs []camera.NamedImage, meta resource.ResponseMetadata) {
@@ -130,10 +152,17 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 	if len(ib.toSend) == 0 {
+		if ib.debug {
+			ib.logger.Debugf("PopFirstToSend: ToSend buffer is empty")
+		}
 		return CachedData{}, false
 	}
 	x := ib.toSend[0]
 	ib.toSend = ib.toSend[1:]
+	if ib.debug {
+		remainingLen := len(ib.toSend)
+		ib.logger.Debugf("PopFirstToSend: consumed 1 image from ToSend buffer, remaining ToSend size: %d", remainingLen)
+	}
 	return x, true
 }
 
@@ -171,6 +200,16 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 	// else then store them in the ring buffer
 	if (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom) {
 		ib.toSend = append(ib.toSend, CachedData{Imgs: images, Meta: meta})
+		toSendLen := len(ib.toSend)
+		if ib.debug {
+			ib.logger.Debugf("StoreImages: stored 1 image directly to ToSend buffer (within capture window), ToSend size: %d", toSendLen)
+		}
+		
+		// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
+		if toSendLen > ib.toSendMaxWarningThreshold {
+			ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.", 
+				toSendLen, ib.toSendMaxWarningThreshold)
+		}
 	} else {
 		// Add to ring buffer (reuse existing logic)
 		ib.ringBuffer = append(ib.ringBuffer, CachedData{Imgs: images, Meta: meta})
@@ -178,6 +217,9 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 		// Remove oldest images if we exceed the max
 		if len(ib.ringBuffer) > ib.maxImages {
 			ib.ringBuffer = ib.ringBuffer[len(ib.ringBuffer)-ib.maxImages:]
+		}
+		if ib.debug {
+			ib.logger.Debugf("StoreImages: stored 1 image to RingBuffer (outside capture window), RingBuffer size: %d", len(ib.ringBuffer))
 		}
 	}
 }

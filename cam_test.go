@@ -79,7 +79,7 @@ func TestShouldSend(t *testing.T) {
 		},
 		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
 		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
-		buf:                     imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
+		buf:                     imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 	}
 
 	res, err := fc.shouldSend(context.Background(), d, time.Now())
@@ -356,7 +356,7 @@ func TestImage(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -407,7 +407,7 @@ func TestImages(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
@@ -451,7 +451,7 @@ func TestProperties(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
 			PropertiesFunc: func(ctx context.Context) (camera.Properties, error) {
 				return properties, nil
@@ -477,7 +477,7 @@ func TestDoCommand(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
@@ -565,7 +565,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 
 	// Use a base time that's close to current time to make windows work
 	// Initialize the image buffer
-	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0)
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0, logging.NewTestLogger(t), true)
 
 	// First, add images at times 1, 2, 3, 4, 5
 	for i := 1; i <= 5; i++ {
@@ -680,7 +680,7 @@ func TestMultipleTriggerWindows(t *testing.T) {
 
 	// Use a base time that's close to current time to make windows work
 	// Initialize the image buffer
-	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0)
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0, logging.NewTestLogger(t), true)
 
 	// First, add images at times 1, 2, 3, 4, 5
 	for i := 1; i <= 5; i++ {

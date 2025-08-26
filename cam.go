@@ -34,6 +34,7 @@ type Config struct {
 	ImageFrequency      float64               `json:"image_frequency"`
 	WindowSecondsBefore int                   `json:"window_seconds_before"`
 	WindowSecondsAfter  int                   `json:"window_seconds_after"`
+	Debug               bool                  `json:"debug"`
 
 	Classifications map[string]float64
 	Objects         map[string]float64
@@ -174,7 +175,7 @@ func init() {
 			if imageFreq == 0 {
 				imageFreq = defaultImageFreq
 			}
-			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter)
+			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter, logger, newConf.Debug)
 
 			// Initialize background image capture worker
 			fc.backgroundWorkers = utils.NewStoppableWorkerWithTicker(

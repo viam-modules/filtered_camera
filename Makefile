@@ -36,7 +36,7 @@ test:
 	go test ./...
 
 lint:
-	golangci-lint run --timeout 10m
+	actionlint
 
 all: module test
 

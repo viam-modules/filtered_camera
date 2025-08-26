@@ -32,6 +32,7 @@ type Config struct {
 	ImageFrequency      float64 `json:"image_frequency"`
 	WindowSecondsBefore int     `json:"window_seconds_before"`
 	WindowSecondsAfter  int     `json:"window_seconds_after"`
+	Debug               bool    `json:"debug"`
 }
 
 func (cfg *Config) Validate(path string) ([]string, []string, error) {
@@ -83,7 +84,7 @@ func init() {
 			if imageFreq == 0 {
 				imageFreq = 1.0
 			}
-			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter)
+			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter, logger, newConf.Debug)
 
 			return cc, nil
 		},
