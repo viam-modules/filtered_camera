@@ -325,7 +325,7 @@ func (fc *filteredCamera) Close(ctx context.Context) error {
 }
 
 func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
-	images, meta, err := fc.cam.Images(ctx)
+	images, meta, err := fc.cam.Images(ctx, nil)
 	if err != nil {
 		fc.logger.Debugf("Error capturing image in background: %v", err)
 		return
@@ -339,7 +339,7 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 }
 
 func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := fc.images(ctx, extra)
+	ni, _, err := fc.images(ctx, extra, true) // true indicates single image mode
 	if err != nil {
 		return nil, camera.ImageMetadata{}, err
 	}
@@ -347,14 +347,15 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 	return ImagesToImage(ctx, ni, mimeType)
 }
 
-func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return fc.images(ctx, nil)
+func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	return fc.images(ctx, extra, false) // false indicates multiple images mode
 }
 
 // images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
 // It then returns the next image present in the ToSend buffer back to the client / data manager
-func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := fc.cam.Images(ctx)
+// singleImageMode indicates if this is called from Image() (true) or Images() (false)
+func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	images, meta, err := fc.cam.Images(ctx, nil)
 	if err != nil {
 		return images, meta, err
 	}
@@ -363,6 +364,33 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		return images, meta, nil
 	}
 
+	// Optimization: If we're still within an active capture window, skip filter checks
+	// Use current time, not meta.CapturedAt, because filter processing can introduce delays
+	currentTime := time.Now()
+	if fc.buf.IsWithinCaptureWindow(currentTime) {
+		if fc.conf.Debug {
+			fc.logger.Infof("OPTIMIZATION: Within capture window, skipping filter checks. CurrentTime: %v, CapturedAt: %v", currentTime, meta.CapturedAt)
+		}
+		// For single image mode (Image() call), return only the latest image
+		if singleImageMode {
+			if x, ok := fc.buf.PopFirstToSend(); ok {
+				return x.Imgs, x.Meta, nil
+			}
+		} else {
+			// For multiple images mode (Images() call), return all buffered images at once
+			if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
+				return allImages, batchMeta, nil
+			}
+		}
+		// If no buffered images, return current image (we're in capture mode)
+		return images, meta, nil
+	}
+
+	if fc.conf.Debug {
+		fc.logger.Infof("OPTIMIZATION: Outside capture window, running filter checks. CurrentTime: %v, CapturedAt: %v", currentTime, meta.CapturedAt)
+	}
+
+	// We're outside capture window, so run filter checks to potentially start a new capture
 	for _, img := range images {
 		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
 		shouldSend, err := fc.shouldSend(ctx, img.Image, meta.CapturedAt)
@@ -374,17 +402,22 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			fc.buf.MarkShouldSend(meta.CapturedAt)
 			fc.buf.CacheImages(images)
 
-			if x, ok := fc.buf.PopFirstToSend(); ok {
-				return x.Imgs, x.Meta, nil
+			// For single image mode (Image() call), return only one image
+			if singleImageMode {
+				if x, ok := fc.buf.PopFirstToSend(); ok {
+					return x.Imgs, x.Meta, nil
+				}
+			} else {
+				// For multiple images mode (Images() call), return all accumulated images
+				if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
+					return allImages, batchMeta, nil
+				}
 			}
 
 			return images, meta, nil
 		}
 	}
-	// background loop will fill ToSend buffer as long as within CaptureTill time
-	if x, ok := fc.buf.PopFirstToSend(); ok {
-		return x.Imgs, x.Meta, nil
-	}
+	// No triggers met and we're outside capture window
 	return nil, meta, data.ErrNoCaptureToStore
 }
 

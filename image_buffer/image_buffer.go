@@ -97,8 +97,8 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	// Log ToSend buffer size (only if debug enabled)
 	toSendLen := len(ib.toSend)
 	if ib.debug {
-		ib.logger.Debugf("MarkShouldSend: added %d images to ToSend buffer, total ToSend size: %d, RingBuffer size: %d", 
-			len(imagesToSend), toSendLen, len(ib.ringBuffer))
+		ib.logger.Infof("MarkShouldSend: triggerTime=%v, captureFrom=%v, captureTill=%v, added %d images to ToSend buffer, total ToSend size: %d, RingBuffer size: %d", 
+			now, ib.captureFrom, ib.captureTill, len(imagesToSend), toSendLen, len(ib.ringBuffer))
 	}
 	
 	// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
@@ -153,7 +153,7 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	defer ib.mu.Unlock()
 	if len(ib.toSend) == 0 {
 		if ib.debug {
-			ib.logger.Debugf("PopFirstToSend: ToSend buffer is empty")
+			ib.logger.Infof("PopFirstToSend: ToSend buffer is empty")
 		}
 		return CachedData{}, false
 	}
@@ -161,9 +161,43 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	ib.toSend = ib.toSend[1:]
 	if ib.debug {
 		remainingLen := len(ib.toSend)
-		ib.logger.Debugf("PopFirstToSend: consumed 1 image from ToSend buffer, remaining ToSend size: %d", remainingLen)
+		ib.logger.Infof("PopFirstToSend: consumed 1 image from ToSend buffer, remaining ToSend size: %d", remainingLen)
 	}
 	return x, true
+}
+
+// PopAllToSend removes and returns all elements from toSend slice as multiple images
+func (ib *ImageBuffer) PopAllToSend() ([]camera.NamedImage, resource.ResponseMetadata, bool) {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+	if len(ib.toSend) == 0 {
+		if ib.debug {
+			ib.logger.Infof("PopAllToSend: ToSend buffer is empty")
+		}
+		return nil, resource.ResponseMetadata{}, false
+	}
+
+	// Combine all images from the ToSend buffer
+	var allImages []camera.NamedImage
+	var earliestMeta resource.ResponseMetadata
+
+	for i, cached := range ib.toSend {
+		allImages = append(allImages, cached.Imgs...)
+		// Use the earliest timestamp as the metadata for the batch
+		if i == 0 || cached.Meta.CapturedAt.Before(earliestMeta.CapturedAt) {
+			earliestMeta = cached.Meta
+		}
+	}
+
+	// Clear the ToSend buffer
+	consumed := len(ib.toSend)
+	ib.toSend = []CachedData{}
+	
+	if ib.debug {
+		ib.logger.Infof("PopAllToSend: consumed %d image batches (%d total images) from ToSend buffer", consumed, len(allImages))
+	}
+	
+	return allImages, earliestMeta, true
 }
 
 // ClearToSend clears the toSend slice
@@ -190,6 +224,20 @@ func (ib *ImageBuffer) GetToSendSlice() []CachedData {
 	return append([]CachedData{}, ib.toSend...)
 }
 
+// IsWithinCaptureWindow returns true if the given time is within the current capture window
+func (ib *ImageBuffer) IsWithinCaptureWindow(now time.Time) bool {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+	withinWindow := (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom)
+	
+	if ib.debug {
+		ib.logger.Infof("IsWithinCaptureWindow: now=%v, captureFrom=%v, captureTill=%v, withinWindow=%v", 
+			now, ib.captureFrom, ib.captureTill, withinWindow)
+	}
+	
+	return withinWindow
+}
+
 // StoreImages intelligently stores images either in ToSend buffer (if within CaptureTill time)
 // or in the RingBuffer (if outside CaptureTill time)
 func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.ResponseMetadata, now time.Time) {
@@ -202,7 +250,7 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 		ib.toSend = append(ib.toSend, CachedData{Imgs: images, Meta: meta})
 		toSendLen := len(ib.toSend)
 		if ib.debug {
-			ib.logger.Debugf("StoreImages: stored 1 image directly to ToSend buffer (within capture window), ToSend size: %d", toSendLen)
+			ib.logger.Infof("StoreImages: stored 1 image directly to ToSend buffer (within capture window), ToSend size: %d", toSendLen)
 		}
 		
 		// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
@@ -219,7 +267,7 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 			ib.ringBuffer = ib.ringBuffer[len(ib.ringBuffer)-ib.maxImages:]
 		}
 		if ib.debug {
-			ib.logger.Debugf("StoreImages: stored 1 image to RingBuffer (outside capture window), RingBuffer size: %d", len(ib.ringBuffer))
+			ib.logger.Infof("StoreImages: stored 1 image to RingBuffer (outside capture window), RingBuffer size: %d", len(ib.ringBuffer))
 		}
 	}
 }

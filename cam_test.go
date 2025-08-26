@@ -358,7 +358,7 @@ func TestImage(t *testing.T) {
 		},
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
-			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+			ImagesFunc: func(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
 					{Image: a, SourceName: ""},
 					{Image: b, SourceName: ""},
@@ -409,7 +409,7 @@ func TestImages(t *testing.T) {
 		},
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
-			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+			ImagesFunc: func(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
 			},
 		},
@@ -420,7 +420,7 @@ func TestImages(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
-	res, meta, err := fc.Images(ctx)
+	res, meta, err := fc.Images(ctx, nil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldNotBeNil)
 
@@ -479,7 +479,7 @@ func TestDoCommand(t *testing.T) {
 		},
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
-			ImagesFunc: func(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+			ImagesFunc: func(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return []camera.NamedImage{
 					{Image: a, SourceName: ""},
 					{Image: b, SourceName: ""},
@@ -535,7 +535,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 	// after each other
 	imagesCam := inject.NewCamera("test_camera")
 	timeCount := 0 // inital time
-	imagesCam.ImagesFunc = func(ctx context.Context) (
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
 		[]camera.NamedImage, resource.ResponseMetadata, error) {
 		timeCount++
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
@@ -650,7 +650,7 @@ func TestMultipleTriggerWindows(t *testing.T) {
 	// after each other
 	imagesCam := inject.NewCamera("test_camera")
 	timeCount := 0 // inital time
-	imagesCam.ImagesFunc = func(ctx context.Context) (
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
 		[]camera.NamedImage, resource.ResponseMetadata, error) {
 		timeCount++
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)

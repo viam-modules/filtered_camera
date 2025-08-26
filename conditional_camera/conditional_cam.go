@@ -5,6 +5,7 @@ package conditional_camera
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
@@ -113,7 +114,7 @@ func (cc *conditionalCamera) DoCommand(ctx context.Context, cmd map[string]inter
 }
 
 func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := cc.images(ctx, extra)
+	ni, _, err := cc.images(ctx, extra, true) // true indicates single image mode
 	if err != nil {
 		return nil, camera.ImageMetadata{}, err
 	}
@@ -121,21 +122,41 @@ func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra m
 	return filtered_camera.ImagesToImage(ctx, ni, mimeType)
 }
 
-func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return cc.images(ctx, nil)
+func (cc *conditionalCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	return cc.images(ctx, extra, false) // false indicates multiple images mode
 }
 
-func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := cc.cam.Images(ctx)
+func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	images, meta, err := cc.cam.Images(ctx, nil)
 	if err != nil {
 		return images, meta, err
 	}
 
-	if filtered_camera.IsFromDataMgmt(ctx, extra) {
-		cc.buf.AddToRingBuffer(images, meta)
-	} else {
+	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
+
+	// Optimization: If we're still within an active capture window, skip filter checks
+	// Use current time, not meta.CapturedAt, because filter processing can introduce delays
+	currentTime := time.Now()
+	if cc.buf.IsWithinCaptureWindow(currentTime) {
+		// For single image mode (Image() call), return only the latest image
+		if singleImageMode {
+			if x, ok := cc.buf.PopFirstToSend(); ok {
+				return x.Imgs, x.Meta, nil
+			}
+		} else {
+			// For multiple images mode (Images() call), return all buffered images at once
+			if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
+				return allImages, batchMeta, nil
+			}
+		}
+		// If no buffered images, return current image (we're in capture mode)
+		return images, meta, nil
+	}
+
+	// We're outside capture window, add to ring buffer and run filter checks
+	cc.buf.AddToRingBuffer(images, meta)
 
 	for range images {
 		shouldSend, err := cc.shouldSend(ctx)
@@ -147,8 +168,16 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		}
 	}
 
-	if x, ok := cc.buf.PopFirstToSend(); ok {
-		return x.Imgs, x.Meta, nil
+	// For single image mode (Image() call), return only one image
+	if singleImageMode {
+		if x, ok := cc.buf.PopFirstToSend(); ok {
+			return x.Imgs, x.Meta, nil
+		}
+	} else {
+		// For multiple images mode (Images() call), return all accumulated images
+		if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
+			return allImages, batchMeta, nil
+		}
 	}
 	return nil, meta, data.ErrNoCaptureToStore
 }
