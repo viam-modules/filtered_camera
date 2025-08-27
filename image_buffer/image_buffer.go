@@ -9,6 +9,11 @@ import (
 	"go.viam.com/rdk/resource"
 )
 
+const (
+	timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+	noDateString    = "no-date"
+)
+
 type CachedData struct {
 	Imgs []camera.NamedImage
 	Meta resource.ResponseMetadata
@@ -93,11 +98,16 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	// Add the images to send
 	ib.toSend = append(ib.toSend, imagesToSend...)
 
-	// Log ToSend buffer size (only if debug enabled)
 	toSendLen := len(ib.toSend)
 	if ib.debug {
-		ib.logger.Infof("MarkShouldSend: triggerTime=%v, captureFrom=%v, captureTill=%v, added %d images to ToSend buffer, total ToSend size: %d, RingBuffer size: %d",
-			now, ib.captureFrom, ib.captureTill, len(imagesToSend), toSendLen, len(ib.ringBuffer))
+		ib.logger.Infow("MarkShouldSend completed",
+			"method", "MarkShouldSend",
+			"triggerTime", now,
+			"captureFrom", ib.captureFrom,
+			"captureTill", ib.captureTill,
+			"imagesAdded", len(imagesToSend),
+			"toSendSize", toSendLen,
+			"ringBufferSize", len(ib.ringBuffer))
 	}
 
 	// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
@@ -140,7 +150,9 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	defer ib.mu.Unlock()
 	if len(ib.toSend) == 0 {
 		if ib.debug {
-			ib.logger.Infof("PopFirstToSend: ToSend buffer is empty")
+			ib.logger.Infow("PopFirstToSend buffer empty",
+				"method", "PopFirstToSend",
+				"toSendSize", 0)
 		}
 		return CachedData{}, false
 	}
@@ -152,7 +164,10 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 
 	if ib.debug {
 		remainingLen := len(ib.toSend)
-		ib.logger.Infof("PopFirstToSend: consumed 1 image from ToSend buffer, remaining ToSend size: %d", remainingLen)
+		ib.logger.Infow("PopFirstToSend consumed image",
+			"method", "PopFirstToSend",
+			"imagesConsumed", 1,
+			"remainingToSendSize", remainingLen)
 	}
 	return x, true
 }
@@ -164,9 +179,9 @@ func timestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMe
 		result[i] = img // Copy the image
 
 		// Use timestamp as prefix - use "no-date" if timestamp not available
-		timestampStr := "no-date"
+		timestampStr := noDateString
 		if !meta.CapturedAt.IsZero() {
-			timestampStr = meta.CapturedAt.Format("2006-01-02T15:04:05.000Z07:00")
+			timestampStr = meta.CapturedAt.Format(timestampFormat)
 		}
 
 		// Format: [timestamp]_[original_name]
@@ -181,7 +196,9 @@ func (ib *ImageBuffer) PopAllToSend() ([]camera.NamedImage, resource.ResponseMet
 	defer ib.mu.Unlock()
 	if len(ib.toSend) == 0 {
 		if ib.debug {
-			ib.logger.Infof("PopAllToSend: ToSend buffer is empty")
+			ib.logger.Infow("PopAllToSend buffer empty",
+				"method", "PopAllToSend",
+				"toSendSize", 0)
 		}
 		return nil, resource.ResponseMetadata{}, false
 	}
@@ -203,7 +220,10 @@ func (ib *ImageBuffer) PopAllToSend() ([]camera.NamedImage, resource.ResponseMet
 
 	if ib.debug {
 		consumed := len(ib.toSend)
-		ib.logger.Infof("PopAllToSend: consumed %d image batches (%d total images) from ToSend buffer", consumed, len(allImages))
+		ib.logger.Infow("PopAllToSend consumed images",
+			"method", "PopAllToSend",
+			"batchesConsumed", consumed,
+			"totalImagesConsumed", len(allImages))
 	}
 	// Clear the ToSend buffer
 	ib.toSend = []CachedData{}
@@ -250,8 +270,12 @@ func (ib *ImageBuffer) IsWithinCaptureWindow(now time.Time) bool {
 	withinWindow := (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom)
 
 	if ib.debug {
-		ib.logger.Infof("IsWithinCaptureWindow: now=%v, captureFrom=%v, captureTill=%v, withinWindow=%v",
-			now, ib.captureFrom, ib.captureTill, withinWindow)
+		ib.logger.Infow("IsWithinCaptureWindow check",
+			"method", "IsWithinCaptureWindow",
+			"now", now,
+			"captureFrom", ib.captureFrom,
+			"captureTill", ib.captureTill,
+			"withinWindow", withinWindow)
 	}
 
 	return withinWindow
@@ -269,7 +293,10 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 		ib.toSend = append(ib.toSend, CachedData{Imgs: images, Meta: meta})
 		toSendLen := len(ib.toSend)
 		if ib.debug {
-			ib.logger.Infof("StoreImages: stored 1 image directly to ToSend buffer (within capture window), ToSend size: %d", toSendLen)
+			ib.logger.Infow("StoreImages: stored image to ToSend buffer",
+				"method", "StoreImages",
+				"withinCaptureWindow", true,
+				"toSendSize", toSendLen)
 		}
 
 		// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
@@ -286,7 +313,10 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 			ib.ringBuffer = ib.ringBuffer[len(ib.ringBuffer)-ib.maxImages:]
 		}
 		if ib.debug {
-			ib.logger.Infof("StoreImages: stored 1 image to RingBuffer (outside capture window), RingBuffer size: %d", len(ib.ringBuffer))
+			ib.logger.Infow("StoreImages: stored image to RingBuffer",
+				"method", "StoreImages",
+				"withinCaptureWindow", false,
+				"ringBufferSize", len(ib.ringBuffer))
 		}
 	}
 }

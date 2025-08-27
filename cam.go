@@ -365,10 +365,13 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		return images, meta, nil
 	}
 
-	// Optimization: If we're still within an active capture window, skip filter checks
+	// If we're still within an active capture window, skip filter checks
 	if fc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
 		if fc.conf.Debug {
-			fc.logger.Infof("OPTIMIZATION: Within capture window, skipping filter checks. CapturedAt: %v", meta.CapturedAt)
+			fc.logger.Infow("Skipping filter checks", 
+				"method", "images",
+				"capturedAt", meta.CapturedAt,
+				"withinCaptureWindow", true)
 		}
 		// For single image mode (Image() call), return only the latest image
 		if singleImageMode {
@@ -376,7 +379,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 				return x.Imgs, x.Meta, nil
 			}
 		} else {
-			// For multiple images mode (Images() call), use smart batching
+			// For multiple images mode (Images() call), batch everything to send in the response
 			if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
 				return allImages, batchMeta, nil
 			}
@@ -386,7 +389,10 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	if fc.conf.Debug {
-		fc.logger.Infof("OPTIMIZATION: Outside capture window, running filter checks. CapturedAt: %v", meta.CapturedAt)
+		fc.logger.Infow("Running filter checks", 
+			"method", "images",
+			"capturedAt", meta.CapturedAt,
+			"withinCaptureWindow", false)
 	}
 
 	// We're outside capture window, so run filter checks to potentially start a new capture
@@ -406,7 +412,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 					return x.Imgs, x.Meta, nil
 				}
 			} else {
-				// For multiple images mode (Images() call), use smart batching
+				// For multiple images mode (Images() call), batch all images together in response
 				if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
 					return allImages, batchMeta, nil
 				}
@@ -414,7 +420,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 
 			// Don't return the trigger image to maintain chronological order
 			// This creates a gap in the sequence but prevents out-of-order uploads
-			// Edge case: triggering is happening faster than the buffer can be filled
+			// Represents the edge case where triggering is happening faster than the buffer can be filled
 			return nil, meta, data.ErrNoCaptureToStore
 		}
 	}
@@ -424,7 +430,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			return x.Imgs, x.Meta, nil
 		}
 	} else {
-		// For multiple images mode (Images() call), use smart batching
+		// For multiple images mode (Images() call), batch all images together in response
 		if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
 			return allImages, batchMeta, nil
 		}
