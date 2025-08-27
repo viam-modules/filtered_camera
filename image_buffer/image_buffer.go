@@ -20,7 +20,6 @@ type ImageBuffer struct {
 	toSend              []CachedData
 	captureFrom         time.Time
 	captureTill         time.Time
-	lastCached          CachedData
 	windowSecondsBefore int
 	windowSecondsAfter  int
 	imageFrequency      float64
@@ -120,18 +119,6 @@ func (ib *ImageBuffer) AddToRingBuffer(imgs []camera.NamedImage, meta resource.R
 	}
 }
 
-func (ib *ImageBuffer) CacheImages(images []camera.NamedImage) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-
-	ib.lastCached = CachedData{
-		Imgs: images,
-		Meta: resource.ResponseMetadata{
-			CapturedAt: time.Now(),
-		},
-	}
-}
-
 // SetCaptureTill sets the captureTill time
 // This method is only used for testing purposes in cam_test.go
 func (ib *ImageBuffer) SetCaptureTill(t time.Time) {
@@ -159,11 +146,33 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	}
 	x := ib.toSend[0]
 	ib.toSend = ib.toSend[1:]
+
+	// Apply timestamp naming to the images
+	x.Imgs = timestampImagesToNames(x.Imgs, x.Meta)
+
 	if ib.debug {
 		remainingLen := len(ib.toSend)
 		ib.logger.Infof("PopFirstToSend: consumed 1 image from ToSend buffer, remaining ToSend size: %d", remainingLen)
 	}
 	return x, true
+}
+
+// timestampImagesToNames converts images to have timestamp-based names in format "[timestamp]_[original_name]"
+func timestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMetadata) []camera.NamedImage {
+	result := make([]camera.NamedImage, len(images))
+	for i, img := range images {
+		result[i] = img // Copy the image
+
+		// Use timestamp as prefix - use "no-date" if timestamp not available
+		timestampStr := "no-date"
+		if !meta.CapturedAt.IsZero() {
+			timestampStr = meta.CapturedAt.Format("2006-01-02T15:04:05.000Z07:00")
+		}
+
+		// Format: [timestamp]_[original_name]
+		result[i].SourceName = timestampStr + "_" + img.SourceName
+	}
+	return result
 }
 
 // PopAllToSend removes and returns all elements from toSend slice as multiple images
@@ -177,29 +186,30 @@ func (ib *ImageBuffer) PopAllToSend() ([]camera.NamedImage, resource.ResponseMet
 		return nil, resource.ResponseMetadata{}, false
 	}
 
-	// Combine all images from the ToSend buffer
+	// Combine all images from the ToSend buffer with individual timestamps
 	var allImages []camera.NamedImage
 	var earliestMeta resource.ResponseMetadata
 
 	for i, cached := range ib.toSend {
-		allImages = append(allImages, cached.Imgs...)
+		// Apply timestamp to each image in this cached data
+		timestampedImages := timestampImagesToNames(cached.Imgs, cached.Meta)
+		allImages = append(allImages, timestampedImages...)
+
 		// Use the earliest timestamp as the metadata for the batch
 		if i == 0 || cached.Meta.CapturedAt.Before(earliestMeta.CapturedAt) {
 			earliestMeta = cached.Meta
 		}
 	}
 
-	// Clear the ToSend buffer
-	consumed := len(ib.toSend)
-	ib.toSend = []CachedData{}
-
 	if ib.debug {
+		consumed := len(ib.toSend)
 		ib.logger.Infof("PopAllToSend: consumed %d image batches (%d total images) from ToSend buffer", consumed, len(allImages))
 	}
+	// Clear the ToSend buffer
+	ib.toSend = []CachedData{}
 
 	return allImages, earliestMeta, true
 }
-
 
 // ClearToSend clears the toSend slice
 // Only used for testing purposes
@@ -223,26 +233,6 @@ func (ib *ImageBuffer) GetRingBufferSlice() []CachedData {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 	return append([]CachedData{}, ib.ringBuffer...)
-}
-
-// GetLatestFromRingBuffer returns a copy of the most recent image from the ring buffer
-// Returns false if ring buffer is empty. Does NOT remove the image from the ring buffer.
-func (ib *ImageBuffer) GetLatestFromRingBuffer() ([]camera.NamedImage, resource.ResponseMetadata, bool) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-	
-	if len(ib.ringBuffer) == 0 {
-		return nil, resource.ResponseMetadata{}, false
-	}
-	
-	// Get the last (most recent) image without removing it
-	latest := ib.ringBuffer[len(ib.ringBuffer)-1]
-	
-	if ib.debug {
-		ib.logger.Infof("GetLatestFromRingBuffer: retrieved latest image, RingBuffer size: %d", len(ib.ringBuffer))
-	}
-	
-	return latest.Imgs, latest.Meta, true
 }
 
 // GetToSendSlice returns a copy of the toSend slice for testing

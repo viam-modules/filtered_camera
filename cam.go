@@ -355,28 +355,13 @@ func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface
 // It then returns the next image present in the ToSend buffer back to the client / data manager
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	var images []camera.NamedImage
-	var meta resource.ResponseMetadata
-	var err error
-	
-	// For data management calls, try to get the latest image from ring buffer first
-	if IsFromDataMgmt(ctx, extra) {
-		if ringImages, ringMeta, ok := fc.buf.GetLatestFromRingBuffer(); ok {
-			images = ringImages
-			meta = ringMeta
-		} else {
-			// Ring buffer is empty, fall back to calling underlying camera
-			images, meta, err = fc.cam.Images(ctx, nil)
-			if err != nil {
-				return images, meta, err
-			}
-		}
-	} else {
-		// For non-data management calls, always call underlying camera directly
-		images, meta, err = fc.cam.Images(ctx, nil)
-		if err != nil {
-			return images, meta, err
-		}
+	// Always call underlying camera to get fresh images
+	images, meta, err := fc.cam.Images(ctx, nil)
+	if err != nil {
+		return images, meta, err
+	}
+
+	if !IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
 
@@ -414,7 +399,6 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		if shouldSend {
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
-			fc.buf.CacheImages(images)
 
 			// For single image mode (Image() call), return only one image
 			if singleImageMode {
@@ -428,7 +412,10 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 				}
 			}
 
-			return images, meta, nil
+			// Don't return the trigger image to maintain chronological order
+			// This creates a gap in the sequence but prevents out-of-order uploads
+			// Edge case: triggering is happening faster than the buffer can be filled
+			return nil, meta, data.ErrNoCaptureToStore
 		}
 	}
 	// No triggers met and we're outside capture window, but check if we have buffered images from previous triggers
@@ -536,3 +523,4 @@ func (fc *filteredCamera) Properties(ctx context.Context) (camera.Properties, er
 	}
 	return p, err
 }
+
