@@ -136,10 +136,8 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		return images, meta, nil
 	}
 
-	// Optimization: If we're still within an active capture window, skip filter checks
-	// Use current time, not meta.CapturedAt, because filter processing can introduce delays
-	currentTime := time.Now()
-	if cc.buf.IsWithinCaptureWindow(currentTime) {
+	// If we're still within an active capture window, skip filter checks
+	if cc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
 		// For single image mode (Image() call), return only the latest image
 		if singleImageMode {
 			if x, ok := cc.buf.PopFirstToSend(); ok {
