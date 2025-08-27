@@ -11,8 +11,17 @@ This allows you to:
 - Classify images and only sync images that have the required label
 - Look for objects in an image and sync the images that have a certain object
 
+The module supports two types of filters:
+
+- **Acceptance filters**: Images are captured when confidence scores meet or exceed specified thresholds
+- **Inhibitory filters**: Images are rejected when confidence scores meet or exceed specified thresholds (marked with `"inhibit": true`)
+
 This module also allows you to specify a time window for syncing the data captured in the N seconds before the capture criteria were met.
 You are also able to customize the time before and the time after the capture criteria, if you need that level of specficity.
+
+The filtered camera uses a background worker that continuously captures images from the underlying camera at the specified frequency and stores them in a ring buffer. When trigger conditions are met, relevant images from the time window are moved to a send buffer for data management retrieval.
+
+When images are captured and buffered for data management, each image receives a timestamp-based name in the format `[timestamp]_[original_name]` to preserve capture timing information and ensure chronological ordering during data sync.
 
 To add the filtered camera to your machine, navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
 Add `camera` / `filtered-camera` to your machine.
@@ -45,8 +54,15 @@ On the new component panel, copy and paste the following attribute template into
 
 Remove the "classifications" or "objects" section depending on if your ML model is a classifier or detector.
 
-> [!WARNING]
-> The data management service must be configured to use the `ReadImage` method and _not_ the `GetImages` method! As of June 2025, the former can be identified as originating from the data management service, while the latter cannot.
+> [!NOTE]
+> The filtered camera can be configured with both `ReadImage` and `Images` methods for data management. The camera detects data management calls through context and extra parameters to apply filtering only when appropriate.
+
+> [!NOTE]
+> The filtered camera behaves differently depending on how it's called:
+> - **Data management calls**: Apply filtering and return buffered images with timestamp-based names
+> - **Non-data management calls**: Bypass filtering and return images directly from the underlying camera
+> - **`Image()` method**: Returns a single image from the buffer  
+> - **`Images()` method**: Returns all available images from the buffer in chronological order
 
 > [!NOTE]
 > For more information, see [Configure a Machine](https://docs.viam.com/operate/get-started/supported-hardware/#configure-hardware-on-your-machine).
@@ -64,6 +80,7 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
 | `window_seconds_after` | float64 | Optional | The size of the time window (in seconds) after the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds after the condition being met. |
 | `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the specified number of seconds preceding and after the condition being met. If this value is set, the 'window_seconds_before' and 'window_seconds_after' variable must both be set to 0.0. |
 | `image_frequency` | float64 | Optional | the frequency at which to place images into the buffer (in Hz). Default value is 1.0 Hz |
+| `debug` | bool | Optional | Enable debug logging for detailed information about image buffering, filtering decisions, and capture windows. Default value is false |
 | `classifications` | float64 | Optional | \*\***DEPRECATED** Use `vision_services`\*\* A map of classification labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a classifier. You can find these labels by testing your vision service. |
 | `objects` | float64 | Optional | \*\***DEPRECATED** use `vision_services` \*\* A map of object detection labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a detector. You can find these labels by testing your vision service. |
 
@@ -96,18 +113,30 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
 
 ## Local Development
 
-To use the `filtered_camera` module, clone this repository to your
-machine’s computer, navigate to the `module` directory, and run:
+To build and use the `filtered_camera` module locally:
 
-```go
-go build
-```
+1. Clone this repository to your machine's computer:
+   ```bash
+   git clone <repository-url>
+   cd filtered_camera
+   ```
 
-On your robot’s page in the [Viam app](https://app.viam.com/), enter
-the [module’s executable path](/registry/create/#prepare-the-module-for-execution, then click
-**Add module**.
-The name must use only lowercase characters.
-Then, click **Save** in the top right corner of the screen.
+2. Build the module:
+   ```bash
+   # Build the module archive (recommended)
+   make module.tar.gz
+   ```
+
+3. Test the module:
+   ```bash
+   # Run all tests
+   make test
+   
+   # Run linting
+   make lint
+   ```
+
+4. On your robot's page in the [Viam app](https://app.viam.com/), enter the module's executable path, then click **Add module**. The name must use only lowercase characters. Then, click **Save** in the top right corner of the screen.
 
 # Viam conditional camera module
 
@@ -135,6 +164,8 @@ The following attributes are available for `viam:camera:conditional-camera` base
 | `window_seconds_before` | float64 | Optional | The size of the time window (in seconds) before the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds preceding the condition being met. |
 | `window_seconds_after` | float64 | Optional | The size of the time window (in seconds) after the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds after the condition being met. |
 | `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the specified number of seconds preceding and after the condition being met. If this value is set, the 'window_seconds_before' and 'window_seconds_after' variable must both be set to 0.0. |
+| `image_frequency` | float64 | Optional | the frequency at which to place images into the buffer (in Hz). Default value is 1.0 Hz |
+| `debug` | bool | Optional | Enable debug logging for detailed information about image buffering, filtering decisions, and capture windows. Default value is false |
 
 On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box.
 
@@ -148,8 +179,8 @@ On the new component panel, copy and paste the following attribute template into
 }
 ```
 
-> [!WARNING]
-> The data management service must be configured to use the `ReadImage` method and _not_ the `GetImages` method! As of June 2025, the former can be identified as originating from the data management service, while the latter cannot.
+> [!NOTE]
+> The conditional camera can be configured with both `ReadImage` and `Images` methods for data management. The camera detects data management calls through context and extra parameters to apply filtering only when appropriate.
 
 ### Example configurations
 
