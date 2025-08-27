@@ -352,6 +352,20 @@ func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface
 }
 
 // images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
+func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, bool) {
+	if singleImageMode {
+		if x, ok := fc.buf.PopFirstToSend(); ok {
+			return x.Imgs, x.Meta, true
+		}
+	} else {
+		if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
+			return allImages, batchMeta, true
+		}
+	}
+	// ToSend buffer is empty - no images to capture
+	return nil, resource.ResponseMetadata{}, false
+}
+
 // It then returns the next image present in the ToSend buffer back to the client / data manager
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
@@ -374,16 +388,8 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 				"capturedAt", meta.CapturedAt,
 				"withinCaptureWindow", true)
 		}
-		// For single image mode (Image() call), return only the latest image
-		if singleImageMode {
-			if x, ok := fc.buf.PopFirstToSend(); ok {
-				return x.Imgs, x.Meta, nil
-			}
-		} else {
-			// For multiple images mode (Images() call), batch everything to send in the response
-			if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
-				return allImages, batchMeta, nil
-			}
+		if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+			return bufferedImages, bufferedMeta, nil
 		}
 		// If no buffered images, return current image (we're in capture mode)
 		return images, meta, nil
@@ -408,16 +414,8 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
 
-			// For single image mode (Image() call), return only one image
-			if singleImageMode {
-				if x, ok := fc.buf.PopFirstToSend(); ok {
-					return x.Imgs, x.Meta, nil
-				}
-			} else {
-				// For multiple images mode (Images() call), batch all images together in response
-				if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
-					return allImages, batchMeta, nil
-				}
+			if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+				return bufferedImages, bufferedMeta, nil
 			}
 
 			// Don't return the trigger image to maintain chronological order
@@ -427,17 +425,11 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		}
 	}
 	// No triggers met and we're outside capture window, but check if we have buffered images from previous triggers
-	if singleImageMode {
-		if x, ok := fc.buf.PopFirstToSend(); ok {
-			return x.Imgs, x.Meta, nil
-		}
-	} else {
-		// For multiple images mode (Images() call), batch all images together in response
-		if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
-			return allImages, batchMeta, nil
-		}
+	if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+		return bufferedImages, bufferedMeta, nil
 	}
 
+	// ToSend buffer is empty - no images to capture
 	return nil, meta, data.ErrNoCaptureToStore
 }
 

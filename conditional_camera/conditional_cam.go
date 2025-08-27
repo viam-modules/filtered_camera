@@ -125,6 +125,19 @@ func (cc *conditionalCamera) Images(ctx context.Context, extra map[string]interf
 	return cc.images(ctx, extra, false) // false indicates multiple images mode
 }
 
+func (cc *conditionalCamera) getBufferedImages(singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, bool) {
+	if singleImageMode {
+		if x, ok := cc.buf.PopFirstToSend(); ok {
+			return x.Imgs, x.Meta, true
+		}
+	} else {
+		if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
+			return allImages, batchMeta, true
+		}
+	}
+	return nil, resource.ResponseMetadata{}, false
+}
+
 func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	images, meta, err := cc.cam.Images(ctx, nil)
 	if err != nil {
@@ -137,16 +150,8 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 
 	// If we're still within an active capture window, skip filter checks
 	if cc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
-		// For single image mode (Image() call), return only the latest image
-		if singleImageMode {
-			if x, ok := cc.buf.PopFirstToSend(); ok {
-				return x.Imgs, x.Meta, nil
-			}
-		} else {
-			// For multiple images mode (Images() call), use smart batching
-			if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
-				return allImages, batchMeta, nil
-			}
+		if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(singleImageMode); ok {
+			return bufferedImages, bufferedMeta, nil
 		}
 		// If no buffered images, return current image (we're in capture mode)
 		return images, meta, nil
@@ -165,16 +170,9 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		}
 	}
 
-	// For single image mode (Image() call), return only one image
-	if singleImageMode {
-		if x, ok := cc.buf.PopFirstToSend(); ok {
-			return x.Imgs, x.Meta, nil
-		}
-	} else {
-		// For multiple images mode (Images() call), use smart batching
-		if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
-			return allImages, batchMeta, nil
-		}
+	// Try to get buffered images
+	if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(singleImageMode); ok {
+		return bufferedImages, bufferedMeta, nil
 	}
 	return nil, meta, data.ErrNoCaptureToStore
 }
