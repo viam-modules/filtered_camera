@@ -356,7 +356,7 @@ func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	// Always call underlying camera to get fresh images
-	images, meta, err := fc.cam.Images(ctx, nil)
+	images, meta, err := fc.cam.Images(ctx, extra)
 	if err != nil {
 		return images, meta, err
 	}
@@ -429,7 +429,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			return allImages, batchMeta, nil
 		}
 	}
-	
+
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
@@ -523,4 +523,3 @@ func (fc *filteredCamera) Properties(ctx context.Context) (camera.Properties, er
 	}
 	return p, err
 }
-
