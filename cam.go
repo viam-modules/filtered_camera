@@ -351,7 +351,9 @@ func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface
 	return fc.images(ctx, extra, false) // false indicates multiple images mode
 }
 
-// images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
+// getBufferedImages returns images from the ToSend buffer depending on the image mode.
+// single image just returns the first image in the queue, while otherwise it returns the whole buffer
+// if ToSend is empty, returns false
 func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, bool) {
 	if singleImageMode {
 		if x, ok := fc.buf.PopFirstToSend(); ok {
@@ -366,7 +368,8 @@ func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.Name
 	return nil, resource.ResponseMetadata{}, false
 }
 
-// It then returns the next image present in the ToSend buffer back to the client / data manager
+// images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
+// It then returns the next image or images present in the ToSend buffer back to the client / data manager
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	// Always call underlying camera to get fresh images
@@ -382,7 +385,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	// If we're still within an active capture window, skip filter checks
 	if fc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
 		if fc.conf.Debug {
-			fc.logger.Infow("Skipping filter checks", 
+			fc.logger.Infow("Skipping filter checks",
 				"method", "images",
 				"singleImageMode", singleImageMode,
 				"capturedAt", meta.CapturedAt,
@@ -396,7 +399,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	if fc.conf.Debug {
-		fc.logger.Infow("Running filter checks", 
+		fc.logger.Infow("Running filter checks",
 			"method", "images",
 			"singleImageMode", singleImageMode,
 			"capturedAt", meta.CapturedAt,
@@ -419,7 +422,8 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			}
 
 			// Don't return the trigger image to maintain chronological order
-			// This creates a gap in the sequence but prevents out-of-order uploads
+			// because the trigger can still be processing while buffer is filling.
+			// That means there might be data from after the trigger in the buffer.
 			// Represents the edge case where triggering is happening faster than the buffer can be filled
 			return nil, meta, data.ErrNoCaptureToStore
 		}
