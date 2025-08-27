@@ -370,6 +370,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		if fc.conf.Debug {
 			fc.logger.Infow("Skipping filter checks", 
 				"method", "images",
+				"singleImageMode", singleImageMode,
 				"capturedAt", meta.CapturedAt,
 				"withinCaptureWindow", true)
 		}
@@ -391,6 +392,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	if fc.conf.Debug {
 		fc.logger.Infow("Running filter checks", 
 			"method", "images",
+			"singleImageMode", singleImageMode,
 			"capturedAt", meta.CapturedAt,
 			"withinCaptureWindow", false)
 	}
