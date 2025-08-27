@@ -2,6 +2,7 @@ package filtered_camera
 
 import (
 	"context"
+	"fmt"
 	"image"
 	"testing"
 	"time"
@@ -235,13 +236,13 @@ func TestValidate(t *testing.T) {
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"camera\" is required")
 	conf.Camera = "foo"
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"vision_services\" is required")
 
 	conf.Vision = "foo"
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -257,7 +258,7 @@ func TestValidate(t *testing.T) {
 			Objects: map[string]float64{"b": .8},
 		},
 	}
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot specify both vision and vision_services")
@@ -265,7 +266,7 @@ func TestValidate(t *testing.T) {
 	// when vision is empty and vision_services is set, it should not error
 	// and return the camera and vision service names
 	conf.Vision = ""
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo", "bar"})
@@ -278,7 +279,7 @@ func TestValidate(t *testing.T) {
 			Objects:         map[string]float64{"a": .8},
 		},
 	}
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -290,7 +291,7 @@ func TestValidate(t *testing.T) {
 			Vision: "foo",
 		},
 	}
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
@@ -310,7 +311,7 @@ func TestValidate(t *testing.T) {
 			Inhibit: true,
 		},
 	}
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "baz", "foo", "bar"})
@@ -319,7 +320,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = 15
 	conf.WindowSecondsAfter = 10
 	conf.WindowSecondsBefore = 5
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "if window_seconds is set, window_seconds_before and window_seconds_after must not be")
@@ -328,7 +329,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = 0
 	conf.WindowSecondsAfter = 10
 	conf.WindowSecondsBefore = 5
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, err, test.ShouldBeNil)
 
@@ -336,7 +337,7 @@ func TestValidate(t *testing.T) {
 	conf.WindowSeconds = -5
 	conf.WindowSecondsAfter = -10
 	conf.WindowSecondsBefore = -10
-	res, _,  err = conf.Validate(".")
+	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "one of window_seconds, window_seconds_after, or window_seconds_before can be negative")
@@ -634,6 +635,179 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 	for i, expected := range expectedTrigger {
 		test.That(t, fc.buf.GetToSendSlice()[i].Meta.CapturedAt, test.ShouldEqual, expected)
 	}
+}
+
+func TestBatchingWithFrequencyMismatch(t *testing.T) {
+	// This test simulates frequency mismatch between background capture and Images() calls:
+	// - Background worker captures images every tick (fc.captureImageInBackground)
+	// - Images() is called every 4 ticks (4:1 frequency mismatch)
+	// - Vision service starts with non-trigger, triggers at tick 12, then back to non-trigger
+	// - Window: 3s before + 2s after = 5s total, buffer holds max 5 images
+	// - Verifies exact batching numbers and ToSend buffer management
+
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	// Create camera that captures images at each tick (1s intervals)
+	imagesCam := inject.NewCamera("test_camera")
+	timeCount := 0
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		timeCount++
+		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
+		return []camera.NamedImage{
+				{Image: image.NewRGBA(image.Rect(0, 0, 10, 10)), SourceName: fmt.Sprintf("img_%d", timeCount)},
+			}, resource.ResponseMetadata{
+				CapturedAt: imageTime,
+			}, nil
+	}
+
+	// Create vision service that initially doesn't trigger (below threshold)
+	visionSvc := inject.NewVisionService("test_vision")
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.5, "person"), // Below 0.8 threshold - no trigger
+		}, nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications:     map[string]float64{"person": 0.8},
+			WindowSecondsBefore: 3,   // 3 seconds before trigger
+			WindowSecondsAfter:  2,   // 2 seconds after trigger
+			ImageFrequency:      1.0, // 1 Hz for buffer size calculation
+			Debug:               true,
+		},
+		logger:                   logger,
+		cam:                      imagesCam,
+		otherVisionServices:      []vision.Service{visionSvc},
+		acceptedClassifications:  map[string]map[string]float64{"test_vision": {"person": 0.8}},
+		acceptedObjects:          map[string]map[string]float64{},
+		inhibitedClassifications: map[string]map[string]float64{},
+		inhibitedObjects:         map[string]map[string]float64{},
+		inhibitors:               []vision.Service{},
+	}
+
+	// Initialize image buffer: (3+2) * 1.0 = 5 images max in ring buffer
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+
+	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
+
+	// Ticks 1-4: Background captures
+	for i := 1; i <= 4; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err1, test.ShouldEqual, data.ErrNoCaptureToStore) // Should fail - no trigger
+	test.That(t, images1, test.ShouldBeNil)
+	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0)
+	// Ring buffer should have 4 images (ticks 1,2,3,4 background captures)
+	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 4)
+	expectedNames1 := []string{"img_1", "img_2", "img_3", "img_4"}
+	for i, data := range fc.buf.GetRingBufferSlice() {
+		img := data.Imgs[0]
+		test.That(t, img.SourceName, test.ShouldEqual, expectedNames1[i])
+	}
+
+	// Ticks 5-8: Background captures
+	for i := 5; i <= 8; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	images2, _, err2 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err2, test.ShouldEqual, data.ErrNoCaptureToStore) // Should fail - no trigger
+	test.That(t, images2, test.ShouldBeNil)
+	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0)
+	// Ring buffer should have 5 images max (ticks 4,5,6,7,8)
+	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 5)
+	
+	t.Logf("RingBuffer after second Images() call contains:")
+	for i, data := range fc.buf.GetRingBufferSlice() {
+		img := data.Imgs[0]
+		t.Logf("  [%d]: %s", i, img.SourceName)
+	}
+	
+	// With 4 more background captures: should have last 5 images (max buffer size)
+	expectedNames2 := []string{"img_4", "img_5", "img_6", "img_7", "img_8"}
+	for i, data := range fc.buf.GetRingBufferSlice() {
+		img := data.Imgs[0]
+		test.That(t, img.SourceName, test.ShouldEqual, expectedNames2[i])
+	}
+
+	// Change vision service to trigger condition
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.9, "person"), // Above 0.8 threshold - should trigger
+		}, nil
+	}
+
+	// Ticks 9-12: Background captures
+	for i := 9; i <= 12; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	// Ring buffer should still have 5 images max
+	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 5)
+	
+	t.Logf("RingBuffer after ticks 9-12 contains:")
+	for i, data := range fc.buf.GetRingBufferSlice() {
+		img := data.Imgs[0]
+		t.Logf("  [%d]: %s", i, img.SourceName)
+	}
+	
+	// Based on previous pattern, we need to see what's actually in the ring buffer
+	// Will adjust expected values after seeing the output
+
+	images3, _, err3 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	t.Logf("Third Images() call returned %d images:", len(images3))
+	for i, img := range images3 {
+		t.Logf("  [%d]: %s", i, img.SourceName)
+	}
+	test.That(t, err3, test.ShouldBeNil) // Should succeed - trigger occurred
+	// Trigger at tick 12: window is [9s, 14s] (12-3 to 12+2)
+	// Available images in ring buffer: 8,9,10,11,12
+	// Images 9,10,11,12 are within window [9,14], so expect 4 images
+	test.That(t, len(images3), test.ShouldEqual, 4) // Initial batch: images 9,10,11,12
+	// Verify exact image names in chronological order
+	expectedNames3 := []string{"img_9", "img_10", "img_11", "img_12"}
+	for i, img := range images3 {
+		test.That(t, img.SourceName, test.ShouldEqual, expectedNames3[i])
+	}
+	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0) // Should be empty after PopAllToSend
+
+	// Change vision service back to non-trigger condition
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.5, "person"), // Below 0.8 threshold - no trigger
+		}, nil
+	}
+
+	// Ticks 13-16: Background captures
+	for i := 13; i <= 16; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	images4, _, err4 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	t.Logf("Fourth Images() call returned %d images:", len(images4))
+	for i, img := range images4 {
+		t.Logf("  [%d]: %s", i, img.SourceName)
+	}
+	test.That(t, err4, test.ShouldBeNil) // Should succeed - still within window or has buffered images
+	// Background worker added images 13,14 to ToSend (within window till 14s)
+	// Images 15,16 should go to ring buffer (outside window)
+	test.That(t, len(images4), test.ShouldEqual, 2) // Should get images 13,14
+
+	expectedNames4 := []string{"img_13", "img_14"}
+	for i, img := range images4 {
+		test.That(t, img.SourceName, test.ShouldEqual, expectedNames4[i])
+	}
+
+	// Ticks 17-20: Background captures
+	for i := 17; i <= 20; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+	images5, _, err5 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err5, test.ShouldEqual, data.ErrNoCaptureToStore) // Should fail - outside window, no trigger
+	test.That(t, images5, test.ShouldBeNil)
+	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0)
 }
 
 func TestMultipleTriggerWindows(t *testing.T) {

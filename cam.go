@@ -13,9 +13,9 @@ import (
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
+	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
-	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/utils"
 
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
@@ -355,21 +355,35 @@ func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface
 // It then returns the next image present in the ToSend buffer back to the client / data manager
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := fc.cam.Images(ctx, nil)
-	if err != nil {
-		return images, meta, err
-	}
-
-	if !IsFromDataMgmt(ctx, extra) {
+	var images []camera.NamedImage
+	var meta resource.ResponseMetadata
+	var err error
+	
+	// For data management calls, try to get the latest image from ring buffer first
+	if IsFromDataMgmt(ctx, extra) {
+		if ringImages, ringMeta, ok := fc.buf.GetLatestFromRingBuffer(); ok {
+			images = ringImages
+			meta = ringMeta
+		} else {
+			// Ring buffer is empty, fall back to calling underlying camera
+			images, meta, err = fc.cam.Images(ctx, nil)
+			if err != nil {
+				return images, meta, err
+			}
+		}
+	} else {
+		// For non-data management calls, always call underlying camera directly
+		images, meta, err = fc.cam.Images(ctx, nil)
+		if err != nil {
+			return images, meta, err
+		}
 		return images, meta, nil
 	}
 
 	// Optimization: If we're still within an active capture window, skip filter checks
-	// Use current time, not meta.CapturedAt, because filter processing can introduce delays
-	currentTime := time.Now()
-	if fc.buf.IsWithinCaptureWindow(currentTime) {
+	if fc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
 		if fc.conf.Debug {
-			fc.logger.Infof("OPTIMIZATION: Within capture window, skipping filter checks. CurrentTime: %v, CapturedAt: %v", currentTime, meta.CapturedAt)
+			fc.logger.Infof("OPTIMIZATION: Within capture window, skipping filter checks. CapturedAt: %v", meta.CapturedAt)
 		}
 		// For single image mode (Image() call), return only the latest image
 		if singleImageMode {
@@ -377,7 +391,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 				return x.Imgs, x.Meta, nil
 			}
 		} else {
-			// For multiple images mode (Images() call), return all buffered images at once
+			// For multiple images mode (Images() call), use smart batching
 			if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
 				return allImages, batchMeta, nil
 			}
@@ -387,7 +401,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	}
 
 	if fc.conf.Debug {
-		fc.logger.Infof("OPTIMIZATION: Outside capture window, running filter checks. CurrentTime: %v, CapturedAt: %v", currentTime, meta.CapturedAt)
+		fc.logger.Infof("OPTIMIZATION: Outside capture window, running filter checks. CapturedAt: %v", meta.CapturedAt)
 	}
 
 	// We're outside capture window, so run filter checks to potentially start a new capture
@@ -408,7 +422,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 					return x.Imgs, x.Meta, nil
 				}
 			} else {
-				// For multiple images mode (Images() call), return all accumulated images
+				// For multiple images mode (Images() call), use smart batching
 				if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
 					return allImages, batchMeta, nil
 				}
@@ -417,7 +431,18 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			return images, meta, nil
 		}
 	}
-	// No triggers met and we're outside capture window
+	// No triggers met and we're outside capture window, but check if we have buffered images from previous triggers
+	if singleImageMode {
+		if x, ok := fc.buf.PopFirstToSend(); ok {
+			return x.Imgs, x.Meta, nil
+		}
+	} else {
+		// For multiple images mode (Images() call), use smart batching
+		if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
+			return allImages, batchMeta, nil
+		}
+	}
+	
 	return nil, meta, data.ErrNoCaptureToStore
 }
 

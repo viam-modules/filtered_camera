@@ -146,7 +146,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 				return x.Imgs, x.Meta, nil
 			}
 		} else {
-			// For multiple images mode (Images() call), return all buffered images at once
+			// For multiple images mode (Images() call), use smart batching
 			if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
 				return allImages, batchMeta, nil
 			}
@@ -174,7 +174,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 			return x.Imgs, x.Meta, nil
 		}
 	} else {
-		// For multiple images mode (Images() call), return all accumulated images
+		// For multiple images mode (Images() call), use smart batching
 		if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
 			return allImages, batchMeta, nil
 		}

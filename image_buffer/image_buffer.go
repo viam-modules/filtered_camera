@@ -93,17 +93,17 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 
 	// Add the images to send
 	ib.toSend = append(ib.toSend, imagesToSend...)
-	
+
 	// Log ToSend buffer size (only if debug enabled)
 	toSendLen := len(ib.toSend)
 	if ib.debug {
-		ib.logger.Infof("MarkShouldSend: triggerTime=%v, captureFrom=%v, captureTill=%v, added %d images to ToSend buffer, total ToSend size: %d, RingBuffer size: %d", 
+		ib.logger.Infof("MarkShouldSend: triggerTime=%v, captureFrom=%v, captureTill=%v, added %d images to ToSend buffer, total ToSend size: %d, RingBuffer size: %d",
 			now, ib.captureFrom, ib.captureTill, len(imagesToSend), toSendLen, len(ib.ringBuffer))
 	}
-	
+
 	// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
 	if toSendLen > ib.toSendMaxWarningThreshold {
-		ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.", 
+		ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.",
 			toSendLen, ib.toSendMaxWarningThreshold)
 	}
 }
@@ -192,13 +192,14 @@ func (ib *ImageBuffer) PopAllToSend() ([]camera.NamedImage, resource.ResponseMet
 	// Clear the ToSend buffer
 	consumed := len(ib.toSend)
 	ib.toSend = []CachedData{}
-	
+
 	if ib.debug {
 		ib.logger.Infof("PopAllToSend: consumed %d image batches (%d total images) from ToSend buffer", consumed, len(allImages))
 	}
-	
+
 	return allImages, earliestMeta, true
 }
+
 
 // ClearToSend clears the toSend slice
 // Only used for testing purposes
@@ -216,6 +217,34 @@ func (ib *ImageBuffer) GetRingBufferLength() int {
 	return len(ib.ringBuffer)
 }
 
+// GetRingBufferSlice returns a copy of the RingBuffer slice for testing
+// Only used for testing purposes
+func (ib *ImageBuffer) GetRingBufferSlice() []CachedData {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+	return append([]CachedData{}, ib.ringBuffer...)
+}
+
+// GetLatestFromRingBuffer returns a copy of the most recent image from the ring buffer
+// Returns false if ring buffer is empty. Does NOT remove the image from the ring buffer.
+func (ib *ImageBuffer) GetLatestFromRingBuffer() ([]camera.NamedImage, resource.ResponseMetadata, bool) {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+	
+	if len(ib.ringBuffer) == 0 {
+		return nil, resource.ResponseMetadata{}, false
+	}
+	
+	// Get the last (most recent) image without removing it
+	latest := ib.ringBuffer[len(ib.ringBuffer)-1]
+	
+	if ib.debug {
+		ib.logger.Infof("GetLatestFromRingBuffer: retrieved latest image, RingBuffer size: %d", len(ib.ringBuffer))
+	}
+	
+	return latest.Imgs, latest.Meta, true
+}
+
 // GetToSendSlice returns a copy of the toSend slice for testing
 // Only used for testing purposes
 func (ib *ImageBuffer) GetToSendSlice() []CachedData {
@@ -229,12 +258,12 @@ func (ib *ImageBuffer) IsWithinCaptureWindow(now time.Time) bool {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 	withinWindow := (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom)
-	
+
 	if ib.debug {
-		ib.logger.Infof("IsWithinCaptureWindow: now=%v, captureFrom=%v, captureTill=%v, withinWindow=%v", 
+		ib.logger.Infof("IsWithinCaptureWindow: now=%v, captureFrom=%v, captureTill=%v, withinWindow=%v",
 			now, ib.captureFrom, ib.captureTill, withinWindow)
 	}
-	
+
 	return withinWindow
 }
 
@@ -252,10 +281,10 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 		if ib.debug {
 			ib.logger.Infof("StoreImages: stored 1 image directly to ToSend buffer (within capture window), ToSend size: %d", toSendLen)
 		}
-		
+
 		// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
 		if toSendLen > ib.toSendMaxWarningThreshold {
-			ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.", 
+			ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.",
 				toSendLen, ib.toSendMaxWarningThreshold)
 		}
 	} else {
