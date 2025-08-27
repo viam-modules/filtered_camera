@@ -422,8 +422,6 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			}
 
 			// Don't return the trigger image to maintain chronological order
-			// because the trigger can still be processing while buffer is filling.
-			// That means there might be data from after the trigger in the buffer.
 			// Represents the edge case where triggering is happening faster than the buffer can be filled
 			return nil, meta, data.ErrNoCaptureToStore
 		}
