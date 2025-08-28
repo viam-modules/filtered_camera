@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 
 	"go.viam.com/test"
@@ -18,7 +19,8 @@ var (
 func TestWindow(t *testing.T) {
 
 	// Initialize the image buffer
-	buf := NewImageBuffer(10, 1.0, 0, 0)
+	logger := logging.NewTestLogger(t)
+	buf := NewImageBuffer(10, 1.0, 0, 0, logger, true) // Enable debug for tests
 
 	buf.ringBuffer = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},
@@ -56,7 +58,8 @@ func TestWindow(t *testing.T) {
 func TestWindowBoundaries(t *testing.T) {
 
 	// Initialize the image buffer
-	buf := NewImageBuffer(0, 1.0, 5, 10)
+	logger := logging.NewTestLogger(t)
+	buf := NewImageBuffer(0, 1.0, 5, 10, logger, true) // Enable debug for tests
 
 	buf.ringBuffer = []CachedData{
 		{Meta: resource.ResponseMetadata{CapturedAt: a}},

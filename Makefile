@@ -36,7 +36,7 @@ test:
 	go test ./...
 
 lint:
-	golangci-lint run --timeout 10m
+	go run github.com/rhysd/actionlint/cmd/actionlint@latest
 
 all: module test
 

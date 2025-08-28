@@ -13,9 +13,9 @@ import (
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
+	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
-	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/utils"
 
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
@@ -34,6 +34,7 @@ type Config struct {
 	ImageFrequency      float64               `json:"image_frequency"`
 	WindowSecondsBefore int                   `json:"window_seconds_before"`
 	WindowSecondsAfter  int                   `json:"window_seconds_after"`
+	Debug               bool                  `json:"debug"`
 
 	Classifications map[string]float64
 	Objects         map[string]float64
@@ -174,7 +175,7 @@ func init() {
 			if imageFreq == 0 {
 				imageFreq = defaultImageFreq
 			}
-			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter)
+			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter, logger, newConf.Debug)
 
 			// Initialize background image capture worker
 			fc.backgroundWorkers = utils.NewStoppableWorkerWithTicker(
@@ -324,7 +325,7 @@ func (fc *filteredCamera) Close(ctx context.Context) error {
 }
 
 func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
-	images, meta, err := fc.cam.Images(ctx)
+	images, meta, err := fc.cam.Images(ctx, nil)
 	if err != nil {
 		fc.logger.Debugf("Error capturing image in background: %v", err)
 		return
@@ -338,7 +339,7 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 }
 
 func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := fc.images(ctx, extra)
+	ni, _, err := fc.images(ctx, extra, true) // true indicates single image mode
 	if err != nil {
 		return nil, camera.ImageMetadata{}, err
 	}
@@ -346,14 +347,33 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 	return ImagesToImage(ctx, ni, mimeType)
 }
 
-func (fc *filteredCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return fc.images(ctx, nil)
+func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	return fc.images(ctx, extra, false) // false indicates multiple images mode
+}
+
+// getBufferedImages returns images from the ToSend buffer depending on the image mode.
+// single image just returns the first image in the queue, while otherwise it returns the whole buffer
+// if ToSend is empty, returns false
+func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, bool) {
+	if singleImageMode {
+		if x, ok := fc.buf.PopFirstToSend(); ok {
+			return x.Imgs, x.Meta, true
+		}
+	} else {
+		if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
+			return allImages, batchMeta, true
+		}
+	}
+	// ToSend buffer is empty - no images to capture
+	return nil, resource.ResponseMetadata{}, false
 }
 
 // images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
-// It then returns the next image present in the ToSend buffer back to the client / data manager
-func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := fc.cam.Images(ctx)
+// It then returns the next image or images present in the ToSend buffer back to the client / data manager
+// singleImageMode indicates if this is called from Image() (true) or Images() (false)
+func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	// Always call underlying camera to get fresh images
+	images, meta, err := fc.cam.Images(ctx, extra)
 	if err != nil {
 		return images, meta, err
 	}
@@ -362,6 +382,31 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		return images, meta, nil
 	}
 
+	// If we're still within an active capture window, skip filter checks
+	if fc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
+		if fc.conf.Debug {
+			fc.logger.Infow("Skipping filter checks",
+				"method", "images",
+				"singleImageMode", singleImageMode,
+				"capturedAt", meta.CapturedAt,
+				"withinCaptureWindow", true)
+		}
+		if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+			return bufferedImages, bufferedMeta, nil
+		}
+		// If no buffered images, return current image (we're in capture mode)
+		return images, meta, nil
+	}
+
+	if fc.conf.Debug {
+		fc.logger.Infow("Running filter checks",
+			"method", "images",
+			"singleImageMode", singleImageMode,
+			"capturedAt", meta.CapturedAt,
+			"withinCaptureWindow", false)
+	}
+
+	// We're outside capture window, so run filter checks to potentially start a new capture
 	for _, img := range images {
 		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
 		shouldSend, err := fc.shouldSend(ctx, img.Image, meta.CapturedAt)
@@ -371,19 +416,22 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 		if shouldSend {
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
-			fc.buf.CacheImages(images)
 
-			if x, ok := fc.buf.PopFirstToSend(); ok {
-				return x.Imgs, x.Meta, nil
+			if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+				return bufferedImages, bufferedMeta, nil
 			}
 
-			return images, meta, nil
+			// Don't return the trigger image to maintain chronological order
+			// Represents the edge case where triggering is happening faster than the buffer can be filled
+			return nil, meta, data.ErrNoCaptureToStore
 		}
 	}
-	// background loop will fill ToSend buffer as long as within CaptureTill time
-	if x, ok := fc.buf.PopFirstToSend(); ok {
-		return x.Imgs, x.Meta, nil
+	// No triggers met and we're outside capture window, but check if we have buffered images from previous triggers
+	if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+		return bufferedImages, bufferedMeta, nil
 	}
+
+	// ToSend buffer is empty - no images to capture
 	return nil, meta, data.ErrNoCaptureToStore
 }
 

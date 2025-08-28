@@ -32,6 +32,7 @@ type Config struct {
 	ImageFrequency      float64 `json:"image_frequency"`
 	WindowSecondsBefore int     `json:"window_seconds_before"`
 	WindowSecondsAfter  int     `json:"window_seconds_after"`
+	Debug               bool    `json:"debug"`
 }
 
 func (cfg *Config) Validate(path string) ([]string, []string, error) {
@@ -83,7 +84,7 @@ func init() {
 			if imageFreq == 0 {
 				imageFreq = 1.0
 			}
-			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter)
+			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter, logger, newConf.Debug)
 
 			return cc, nil
 		},
@@ -112,7 +113,7 @@ func (cc *conditionalCamera) DoCommand(ctx context.Context, cmd map[string]inter
 }
 
 func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := cc.images(ctx, extra)
+	ni, _, err := cc.images(ctx, extra, true) // true indicates single image mode
 	if err != nil {
 		return nil, camera.ImageMetadata{}, err
 	}
@@ -120,21 +121,44 @@ func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra m
 	return filtered_camera.ImagesToImage(ctx, ni, mimeType)
 }
 
-func (cc *conditionalCamera) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return cc.images(ctx, nil)
+func (cc *conditionalCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	return cc.images(ctx, extra, false) // false indicates multiple images mode
 }
 
-func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := cc.cam.Images(ctx)
+func (cc *conditionalCamera) getBufferedImages(singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, bool) {
+	if singleImageMode {
+		if x, ok := cc.buf.PopFirstToSend(); ok {
+			return x.Imgs, x.Meta, true
+		}
+	} else {
+		if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
+			return allImages, batchMeta, true
+		}
+	}
+	return nil, resource.ResponseMetadata{}, false
+}
+
+func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	images, meta, err := cc.cam.Images(ctx, nil)
 	if err != nil {
 		return images, meta, err
 	}
 
-	if filtered_camera.IsFromDataMgmt(ctx, extra) {
-		cc.buf.AddToRingBuffer(images, meta)
-	} else {
+	if !filtered_camera.IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
+
+	// If we're still within an active capture window, skip filter checks
+	if cc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
+		if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(singleImageMode); ok {
+			return bufferedImages, bufferedMeta, nil
+		}
+		// If no buffered images, return current image (we're in capture mode)
+		return images, meta, nil
+	}
+
+	// We're outside capture window, add to ring buffer and run filter checks
+	cc.buf.AddToRingBuffer(images, meta)
 
 	for range images {
 		shouldSend, err := cc.shouldSend(ctx)
@@ -146,8 +170,9 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		}
 	}
 
-	if x, ok := cc.buf.PopFirstToSend(); ok {
-		return x.Imgs, x.Meta, nil
+	// Try to get buffered images
+	if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(singleImageMode); ok {
+		return bufferedImages, bufferedMeta, nil
 	}
 	return nil, meta, data.ErrNoCaptureToStore
 }

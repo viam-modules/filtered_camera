@@ -27,7 +27,7 @@ func realMain() error {
 	ctx := context.Background()
 	logger := logging.NewDebugLogger("remotetest")
 
-	conf, err := config.ReadLocalConfig(ctx, os.Args[1], logger)
+	conf, err := config.ReadLocalConfig(os.Args[1], logger)
 	if err != nil {
 		return err
 	}
