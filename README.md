@@ -26,6 +26,9 @@ When images are captured and buffered for data management, each image receives a
 To add the filtered camera to your machine, navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
 Add `camera` / `filtered-camera` to your machine.
 
+> [!NOTE]  
+> For a tutorial on filtering data with this module, see [Selectively capture data using filtered-camera](https:docs.viam.com/tutorials/projects/filtered-camera/).
+
 ## Configure your filtered camera
 
 On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box.
