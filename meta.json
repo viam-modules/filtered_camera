@@ -1,13 +1,25 @@
 {
-    "module_id": "erh:filtered-camera",
+    "module_id": "viam:filtered-camera",
     "visibility": "public",
-    "url": "https://github.com/erh/filtered_camera",
+    "url": "https://github.com/viam-modules/filtered_camera",
     "description": "a filtered camera",
     "models": [
         {
             "api": "rdk:component:camera",
-            "model": "erh:camera:filtered-camera"
+            "model": "viam:camera:filtered-camera",
+            "markdown_link": "README.md#configure-your-filtered-camera",
+            "short_description": "Filter captured data to selectively store only the data that meets certain criteria."
+        },
+        {
+            "api": "rdk:component:camera",
+            "model": "viam:camera:conditional-camera",
+            "markdown_link": "README.md#configure-your-conditional-camera",
+            "short_description": "Filter image data by using a generic filter service as input."
         }
     ],
+    "build": {
+        "build": "make module.tar.gz",
+        "arch" : ["linux/amd64", "linux/arm64", "darwin/arm64", "windows/amd64"]
+    },
     "entrypoint": "filtered-camera"
 }
