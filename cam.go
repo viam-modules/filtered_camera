@@ -355,7 +355,8 @@ func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface
 	}
 	if fc.conf.Debug {
 		var names []string
-		for _, img := range images {
+		for i, img := range images {
+			img.SourceName = fmt.Sprintf("img_%d", i)
 			names = append(names, img.SourceName)
 		}
 		fc.logger.Infow("Image names in slice",
