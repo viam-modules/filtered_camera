@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"strings"
 	"time"
 
 	"go.viam.com/rdk/components/camera"
@@ -348,7 +349,21 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 }
 
 func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return fc.images(ctx, extra, false) // false indicates multiple images mode
+	images, meta, err := fc.images(ctx, extra, false) // false indicates multiple images mode
+	if err != nil {
+		return nil, resource.ResponseMetadata{}, err
+	}
+	if fc.conf.Debug {
+		var names []string
+		for _, img := range images {
+			names = append(names, img.SourceName)
+		}
+		fc.logger.Infow("Image names in slice",
+			"method", "images",
+			"sourceNames", strings.Join(names, ", "),
+			"imageCount", len(images))
+	}
+	return images, meta, nil
 }
 
 // getBufferedImages returns images from the ToSend buffer depending on the image mode.
