@@ -433,7 +433,7 @@ func TestImages(t *testing.T) {
 	test.That(t, err, test.ShouldEqual, data.ErrNoCaptureToStore)
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, meta, test.ShouldNotBeNil)
-	test.That(t, meta.CapturedAt, test.ShouldResemble, time.Time{})
+	test.That(t, meta.CapturedAt, test.ShouldResemble, timestamp)
 }
 
 func TestImageWithBufferedImages(t *testing.T) {
