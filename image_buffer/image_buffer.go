@@ -102,9 +102,9 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	if ib.debug {
 		ib.logger.Infow("MarkShouldSend completed",
 			"method", "MarkShouldSend",
-			"triggerTime", now,
-			"captureFrom", ib.captureFrom,
-			"captureTill", ib.captureTill,
+			"triggerTime", now.Format(timestampFormat),
+			"captureFrom", ib.captureFrom.Format(timestampFormat),
+			"captureTill", ib.captureTill.Format(timestampFormat),
 			"imagesAdded", len(imagesToSend),
 			"toSendSize", toSendLen,
 			"ringBufferSize", len(ib.ringBuffer))
@@ -272,9 +272,9 @@ func (ib *ImageBuffer) IsWithinCaptureWindow(now time.Time) bool {
 	if ib.debug {
 		ib.logger.Infow("IsWithinCaptureWindow check",
 			"method", "IsWithinCaptureWindow",
-			"now", now,
-			"captureFrom", ib.captureFrom,
-			"captureTill", ib.captureTill,
+			"now", now.Format(timestampFormat),
+			"captureFrom", ib.captureFrom.Format(timestampFormat),
+			"captureTill", ib.captureTill.Format(timestampFormat),
 			"withinWindow", withinWindow)
 	}
 
