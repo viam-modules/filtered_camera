@@ -40,11 +40,11 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 	// Keep images for 2 * windowSeconds (before and after trigger)
 	var maxImages int
 	if windowSeconds > 0 {
-		maxImages = int(2 * float64(windowSeconds) * imageFrequency)
+		maxImages = int(3 * float64(windowSeconds) * imageFrequency)
 		windowSecondsBefore = windowSeconds
 		windowSecondsAfter = windowSeconds
 	} else {
-		maxImages = int(float64(windowSecondsBefore+windowSecondsAfter) * imageFrequency)
+		maxImages = int(3 * float64(windowSecondsBefore+windowSecondsAfter) * imageFrequency)
 	}
 	return &ImageBuffer{
 		ringBuffer:          []CachedData{},
@@ -60,7 +60,7 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 	}
 }
 
-func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
+func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
@@ -68,10 +68,10 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	beforeTimeBoundary := time.Second * time.Duration(ib.windowSecondsBefore)
 	afterTimeBoundary := time.Second * time.Duration(ib.windowSecondsAfter)
 
-	newCaptureFrom := now.Add(-beforeTimeBoundary)
-	newCaptureTill := now.Add(afterTimeBoundary)
+	newCaptureFrom := triggerTime.Add(-beforeTimeBoundary)
+	newCaptureTill := triggerTime.Add(afterTimeBoundary)
 	// If we are in the middle of capturing new images, we want to keep the left boundary, i.e. the old captureFrom's value
-	if ib.captureTill.Before(now) {
+	if ib.captureTill.Before(triggerTime) {
 		ib.captureFrom = newCaptureFrom
 	}
 	ib.captureTill = newCaptureTill
@@ -102,9 +102,9 @@ func (ib *ImageBuffer) MarkShouldSend(now time.Time) {
 	if ib.debug {
 		ib.logger.Infow("MarkShouldSend completed",
 			"method", "MarkShouldSend",
-			"triggerTime", now,
-			"captureFrom", ib.captureFrom,
-			"captureTill", ib.captureTill,
+			"triggerTime", triggerTime.Format(timestampFormat),
+			"captureFrom", ib.captureFrom.Format(timestampFormat),
+			"captureTill", ib.captureTill.Format(timestampFormat),
 			"imagesAdded", len(imagesToSend),
 			"toSendSize", toSendLen,
 			"ringBufferSize", len(ib.ringBuffer))
@@ -272,9 +272,9 @@ func (ib *ImageBuffer) IsWithinCaptureWindow(now time.Time) bool {
 	if ib.debug {
 		ib.logger.Infow("IsWithinCaptureWindow check",
 			"method", "IsWithinCaptureWindow",
-			"now", now,
-			"captureFrom", ib.captureFrom,
-			"captureTill", ib.captureTill,
+			"now", now.Format(timestampFormat),
+			"captureFrom", ib.captureFrom.Format(timestampFormat),
+			"captureTill", ib.captureTill.Format(timestampFormat),
 			"withinWindow", withinWindow)
 	}
 

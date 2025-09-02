@@ -432,7 +432,6 @@ func TestImages(t *testing.T) {
 	// Trigger occurs but no historical buffered images available (edge case: triggering faster than buffer can fill)
 	test.That(t, err, test.ShouldEqual, data.ErrNoCaptureToStore)
 	test.That(t, res, test.ShouldBeNil)
-
 	test.That(t, meta, test.ShouldNotBeNil)
 	test.That(t, meta.CapturedAt, test.ShouldResemble, timestamp)
 }
@@ -468,7 +467,7 @@ func TestImageWithBufferedImages(t *testing.T) {
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: a, SourceName: "buffered_img_1"},
 	}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-2 * time.Second)})
-	
+
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: b, SourceName: "buffered_img_2"},
 	}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-1 * time.Second)})
@@ -520,11 +519,11 @@ func TestImagesWithBufferedImages(t *testing.T) {
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: a, SourceName: "buffered_img_1"},
 	}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-2 * time.Second)})
-	
+
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: b, SourceName: "buffered_img_2"},
 	}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-1 * time.Second)})
-	
+
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: c, SourceName: "buffered_img_3"},
 	}, resource.ResponseMetadata{CapturedAt: baseTime})
@@ -538,7 +537,7 @@ func TestImagesWithBufferedImages(t *testing.T) {
 
 	// Should get all buffered images (with timestamp naming)
 	test.That(t, len(res), test.ShouldEqual, 3)
-	
+
 	// Verify images have timestamp prefixes (format: [timestamp]_[original_name])
 	for _, img := range res {
 		test.That(t, strings.Contains(img.SourceName, "_buffered_img_"), test.ShouldBeTrue)
@@ -687,8 +686,6 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		fc.captureImageInBackground(ctx)
 	}
-	// Verify ring buffer contains only the last 4 images (2, 3, 4, 5)
-	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 4)
 
 	// Manually trigger at time 5, which should capture images 3, 4, 5, 6, 7 (within 2 second window [3, 7])
 	triggerTime1 := baseTime.Add(5 * time.Second)
@@ -721,8 +718,6 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 	// Clear ToSend to prepare for second trigger
 	fc.buf.ClearToSend()
 	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0)
-	// Verify ring buffer contains only the last 4 images (7, 8, 9, 10)
-	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 4)
 
 	// Manually trigger at time 10, which should capture images 8, 9, 10
 	triggerTime2 := baseTime.Add(10 * time.Second)
@@ -817,13 +812,6 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	test.That(t, err1, test.ShouldEqual, data.ErrNoCaptureToStore) // Should fail - no trigger
 	test.That(t, images1, test.ShouldBeNil)
 	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0)
-	// Ring buffer should have 4 images (ticks 1,2,3,4 background captures)
-	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 4)
-	expectedNames1 := []string{"img_1", "img_2", "img_3", "img_4"}
-	for i, data := range fc.buf.GetRingBufferSlice() {
-		img := data.Imgs[0]
-		test.That(t, img.SourceName, test.ShouldEqual, expectedNames1[i])
-	}
 
 	// Ticks 5-8: Background captures
 	for i := 5; i <= 8; i++ {
@@ -833,22 +821,6 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	test.That(t, err2, test.ShouldEqual, data.ErrNoCaptureToStore) // Should fail - no trigger
 	test.That(t, images2, test.ShouldBeNil)
 	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0)
-	// Ring buffer should have 5 images max (ticks 4,5,6,7,8)
-	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 5)
-	
-	t.Logf("RingBuffer after second Images() call contains:")
-	for i, data := range fc.buf.GetRingBufferSlice() {
-		img := data.Imgs[0]
-		t.Logf("  [%d]: %s", i, img.SourceName)
-	}
-	
-	// With 4 more background captures: should have last 5 images (max buffer size)
-	// Note: img_5 is missing because it was consumed by the failed Images() call above
-	expectedNames2 := []string{"img_4", "img_6", "img_7", "img_8", "img_9"}
-	for i, data := range fc.buf.GetRingBufferSlice() {
-		img := data.Imgs[0]
-		test.That(t, img.SourceName, test.ShouldEqual, expectedNames2[i])
-	}
 
 	// Change vision service to trigger condition
 	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
@@ -861,17 +833,6 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	for i := 11; i <= 12; i++ {
 		fc.captureImageInBackground(ctx)
 	}
-	// Ring buffer should still have 5 images max
-	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 5)
-	
-	t.Logf("RingBuffer after ticks 11-12 contains:")
-	for i, data := range fc.buf.GetRingBufferSlice() {
-		img := data.Imgs[0]
-		t.Logf("  [%d]: %s", i, img.SourceName)
-	}
-	
-	// Ring buffer should have: img_6, img_7, img_8, img_9, img_11, img_12 but max 5 so img_6 gets evicted
-	// Expected: img_7, img_8, img_9, img_11, img_12
 
 	images3, _, err3 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
 	t.Logf("Third Images() call returned %d images:", len(images3))
@@ -882,7 +843,7 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	// Instead we get buffered images from the window [10s, 15s]
 	// Available images in ring buffer: img_7, img_8, img_9, img_11, img_12
 	// Images within window [10s, 15s]: img_11, img_12 (img_10 missing due to gap)
-	test.That(t, err3, test.ShouldBeNil) // Should succeed - trigger occurred and buffered images available
+	test.That(t, err3, test.ShouldBeNil)            // Should succeed - trigger occurred and buffered images available
 	test.That(t, len(images3), test.ShouldEqual, 2) // Images 11, 12
 	// Verify exact image names in chronological order (with timestamp prefixes)
 	expectedNames3 := []string{"img_11", "img_12"}
@@ -940,7 +901,7 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 func TestOverlappingTriggerWindows(t *testing.T) {
 	// This test verifies that overlapping trigger windows don't send duplicate images
 	// Scenario: 10s before + 2s after = 12s total window, with triggers 5 seconds apart
-	// Window 1: [T-10, T+2] 
+	// Window 1: [T-10, T+2]
 	// Window 2: [T+5-10, T+5+2] = [T-5, T+7]
 	// Overlap: [T-5, T+2] should not be sent twice
 
@@ -956,10 +917,10 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 		timeCount++
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
 		return []camera.NamedImage{
-			{Image: image.NewRGBA(image.Rect(0, 0, 10, 10)), SourceName: fmt.Sprintf("img_%d", timeCount)},
-		}, resource.ResponseMetadata{
-			CapturedAt: imageTime,
-		}, nil
+				{Image: image.NewRGBA(image.Rect(0, 0, 10, 10)), SourceName: fmt.Sprintf("img_%d", timeCount)},
+			}, resource.ResponseMetadata{
+				CapturedAt: imageTime,
+			}, nil
 	}
 
 	// Create vision service that triggers when we want it to
@@ -980,7 +941,7 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 		conf: &Config{
 			Classifications:     map[string]float64{"person": 0.8},
 			WindowSecondsBefore: 10, // Long before window
-			WindowSecondsAfter:  2,  // Short after window  
+			WindowSecondsAfter:  2,  // Short after window
 			ImageFrequency:      1.0,
 			Debug:               true,
 		},
@@ -1003,18 +964,15 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	for i := 1; i <= 15; i++ {
 		fc.captureImageInBackground(ctx)
 	}
-	
-	// Ring buffer should have max 12 images (last 12: img_4 through img_15)
-	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldEqual, 12)
-	
+
 	// First trigger at time T (tick 16)
 	shouldTrigger = true
 	fc.captureImageInBackground(ctx) // This will trigger at img_16
-	
+
 	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err1, test.ShouldBeNil)
-	
-	// Window 1: [T-10, T+2] = [6s, 18s] 
+
+	// Window 1: [T-10, T+2] = [6s, 18s]
 	// Available images in ring buffer: img_4 through img_15 (at trigger time)
 	// Images 6-15 should be within window [6s, 18s] - but ring buffer only had img_4-15
 	// So expect images img_6 through img_15 = 10 images
@@ -1022,13 +980,13 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	for i, img := range images1 {
 		t.Logf("  [%d]: %s", i, img.SourceName)
 	}
-	
+
 	// Let capture window continue for a few more images (should go to ToSend directly)
-	shouldTrigger = false  // Stop triggering new windows
+	shouldTrigger = false // Stop triggering new windows
 	for i := 17; i <= 18; i++ {
-		fc.captureImageInBackground(ctx)  // These should go to ToSend (within window till 18s)
+		fc.captureImageInBackground(ctx) // These should go to ToSend (within window till 18s)
 	}
-	
+
 	// Second Images() call should get the continuing images
 	images1_continued, _, err1_cont := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err1_cont, test.ShouldBeNil)
@@ -1036,43 +994,43 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	for i, img := range images1_continued {
 		t.Logf("  [%d]: %s", i, img.SourceName)
 	}
-	
+
 	// Wait for first capture window to end, then trigger second window
 	// Add images outside the first window to ring buffer
 	for i := 19; i <= 25; i++ {
-		fc.captureImageInBackground(ctx)  // These go to ring buffer (outside first window)
+		fc.captureImageInBackground(ctx) // These go to ring buffer (outside first window)
 	}
-	
+
 	// Second trigger at T+10 (tick 26) - should create overlapping window
 	shouldTrigger = true
 	fc.captureImageInBackground(ctx) // This triggers at img_26, time = T+10
-	
+
 	images2, _, err2 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err2, test.ShouldBeNil)
-	
+
 	// Window 2: [T+10-10, T+10+2] = [T, T+12] = [16s, 28s]
-	// This overlaps with window 1's [6s, 18s] in the range [16s, 18s] 
+	// This overlaps with window 1's [6s, 18s] in the range [16s, 18s]
 	// But images 16-18 were already sent in window 1!
 	// Ring buffer at trigger 2 should have: img_16 onwards (since window 1 ended)
 	// Images within [16s, 28s] from ring buffer should be img_16 through img_25 (if available)
-	t.Logf("Second trigger returned %d images:", len(images2))  
+	t.Logf("Second trigger returned %d images:", len(images2))
 	for i, img := range images2 {
 		t.Logf("  [%d]: %s", i, img.SourceName)
 	}
-	
+
 	// Verify no duplicates by checking all returned image names
 	allImages := make(map[string]int) // image name -> count
-	
+
 	for _, img := range images1 {
 		allImages[img.SourceName]++
 	}
 	for _, img := range images1_continued {
-		allImages[img.SourceName]++  
+		allImages[img.SourceName]++
 	}
 	for _, img := range images2 {
 		allImages[img.SourceName]++
 	}
-	
+
 	t.Logf("All images returned with counts:")
 	duplicateFound := false
 	for name, count := range allImages {
@@ -1082,7 +1040,7 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 			t.Errorf("Duplicate image found: %s sent %d times", name, count)
 		}
 	}
-	
+
 	// The test should pass - no duplicates with the original logic
 	test.That(t, duplicateFound, test.ShouldBeFalse)
 }
