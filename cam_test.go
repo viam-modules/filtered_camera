@@ -1045,6 +1045,104 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	test.That(t, duplicateFound, test.ShouldBeFalse)
 }
 
+func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
+	// This test verifies that when we're within a capture window but ToSend buffer is empty,
+	// the current images returned get properly timestamped with format "[timestamp]_[original_name]"
+
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	// Create camera that returns images with "color" as SourceName
+	imagesCam := inject.NewCamera("test_camera")
+	captureCount := 0
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		captureCount++
+		currentTime := baseTime.Add(time.Duration(captureCount) * time.Second)
+		return []camera.NamedImage{
+				{Image: image.NewRGBA(image.Rect(0, 0, 10, 10)), SourceName: "color"}, // Raw "color" SourceName
+			}, resource.ResponseMetadata{
+				CapturedAt: currentTime,
+			}, nil
+	}
+
+	// Create vision service that always triggers (for easy window setup)
+	visionSvc := inject.NewVisionService("test_vision")
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.9, "person"), // Above 0.8 threshold - triggers
+		}, nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications:     map[string]float64{"person": 0.8},
+			WindowSecondsBefore: 2,   // 2 seconds before trigger
+			WindowSecondsAfter:  3,   // 3 seconds after trigger
+			ImageFrequency:      1.0, // 1 Hz
+			Debug:               true,
+		},
+		logger:                   logger,
+		cam:                      imagesCam,
+		otherVisionServices:      []vision.Service{visionSvc},
+		acceptedClassifications:  map[string]map[string]float64{"test_vision": {"person": 0.8}},
+		acceptedObjects:          map[string]map[string]float64{},
+		inhibitedClassifications: map[string]map[string]float64{},
+		inhibitedObjects:         map[string]map[string]float64{},
+		inhibitors:               []vision.Service{},
+	}
+
+	// Initialize image buffer
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+
+	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
+
+	// Step 1: Build up some ring buffer by capturing background images (simulate background worker)
+	for i := 0; i < 5; i++ {
+		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
+	}
+
+	// Step 2: Trigger a capture window by calling Images() with data management context
+	// This should trigger because vision service returns confidence > 0.8
+	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err1, test.ShouldBeNil)
+	test.That(t, len(images1), test.ShouldEqual, 2) // secondsBefore is 2, should have two sent to Capture
+
+	// Step 3: Clear ToSend buffer to simulate the race condition scenario
+	fc.buf.ClearToSend()
+
+	// Verify ToSend buffer is empty
+	toSendLen := fc.buf.GetToSendLength()
+	test.That(t, toSendLen, test.ShouldEqual, 0)
+
+	// Step 4: Call Images() while within capture window but ToSend buffer is empty
+	// This should trigger the code path: fc.buf.IsWithinCaptureWindow() == true, but getBufferedImages() returns false
+	finalImages, finalMeta, err2 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err2, test.ShouldBeNil)
+	test.That(t, len(finalImages), test.ShouldEqual, 1)
+
+	// Step 6: Verify the returned image has timestamped SourceName, not raw "color"
+	returnedImage := finalImages[0]
+	test.That(t, returnedImage.SourceName, test.ShouldNotEqual, "color")                   // Should NOT be raw "color"
+	test.That(t, strings.HasSuffix(returnedImage.SourceName, "_color"), test.ShouldBeTrue) // Should end with "_color"
+
+	// Parse out the timestamp from the SourceName (format: "[timestamp]_color")
+	timestampStr := strings.TrimSuffix(returnedImage.SourceName, "_color")
+	const timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+	parsedTime, err := time.Parse(timestampFormat, timestampStr)
+	test.That(t, err, test.ShouldBeNil)
+	// The expected time should be the CapturedAt time from the metadata
+	expectedTime := finalMeta.CapturedAt
+	// Truncate both times to millisecond precision for comparison
+	parsedTimeMs := parsedTime.Truncate(time.Millisecond)
+	expectedTimeMs := expectedTime.Truncate(time.Millisecond)
+	// Compare timestamps - they should be equal
+	test.That(t, parsedTimeMs.Equal(expectedTimeMs), test.ShouldBeTrue)
+}
+
 func TestMultipleTriggerWindows(t *testing.T) {
 	// This test verifies that the ring buffer correctly captures images within trigger windows
 	// and keeps extending the trigger window if MarkShouldSend keeps being called

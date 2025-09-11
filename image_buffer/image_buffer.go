@@ -160,7 +160,7 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	ib.toSend = ib.toSend[1:]
 
 	// Apply timestamp naming to the images
-	x.Imgs = timestampImagesToNames(x.Imgs, x.Meta)
+	x.Imgs = TimestampImagesToNames(x.Imgs, x.Meta)
 
 	if ib.debug {
 		remainingLen := len(ib.toSend)
@@ -172,8 +172,8 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	return x, true
 }
 
-// timestampImagesToNames converts images to have timestamp-based names in format "[timestamp]_[original_name]"
-func timestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMetadata) []camera.NamedImage {
+// TimestampImagesToNames converts images to have timestamp-based names in format "[timestamp]_[original_name]"
+func TimestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMetadata) []camera.NamedImage {
 	result := make([]camera.NamedImage, len(images))
 	for i, img := range images {
 		result[i] = img // Copy the image
@@ -209,7 +209,7 @@ func (ib *ImageBuffer) PopAllToSend() ([]camera.NamedImage, resource.ResponseMet
 
 	for i, cached := range ib.toSend {
 		// Apply timestamp to each image in this cached data
-		timestampedImages := timestampImagesToNames(cached.Imgs, cached.Meta)
+		timestampedImages := TimestampImagesToNames(cached.Imgs, cached.Meta)
 		allImages = append(allImages, timestampedImages...)
 
 		// Use the earliest timestamp as the metadata for the batch
