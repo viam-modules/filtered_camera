@@ -1085,6 +1085,24 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	test.That(t, duplicateFound, test.ShouldBeFalse)
 }
 
+func assertTimestampsMatch(t *testing.T, got string, want time.Time) {
+	t.Helper()
+	const timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+	// Parse out the timestamp from the SourceName (format: "[timestamp]_color")
+	t.Logf("got source name: %s", got)
+	timestampStr, _, found := strings.Cut(got, "_")
+	test.That(t, found, test.ShouldBeTrue)
+	parsedTime, err := time.Parse(timestampFormat, timestampStr)
+	test.That(t, err, test.ShouldBeNil)
+	// Truncate both times to millisecond precision for comparison
+	parsedTimeMs := parsedTime.Truncate(time.Millisecond)
+	expectedTimeMs := want.Truncate(time.Millisecond)
+	t.Logf("parsed timestamp: %s", parsedTimeMs)
+	t.Logf("expected timestamp: %s", expectedTimeMs)
+	// Compare timestamps - they should be equal
+	test.That(t, parsedTimeMs.Equal(expectedTimeMs), test.ShouldBeTrue)
+}
+
 func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 	// This test verifies that when we're within a capture window but ToSend buffer is empty,
 	// the current images returned get properly timestamped with format "[timestamp]_[original_name]"
