@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
 	"time"
 
 	"go.viam.com/rdk/components/camera"
@@ -325,7 +324,7 @@ func (fc *filteredCamera) Close(ctx context.Context) error {
 }
 
 func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
-	images, meta, err := fc.cam.Images(ctx, nil)
+	images, meta, err := fc.cam.Images(ctx, nil, nil)
 	if err != nil {
 		fc.logger.Debugf("Error capturing image in background: %v", err)
 		return
@@ -344,10 +343,10 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 		return nil, camera.ImageMetadata{}, err
 	}
 
-	return ImagesToImage(ctx, ni, mimeType)
+	return ImagesToImage(ctx, ni)
 }
 
-func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return fc.images(ctx, extra, false) // false indicates multiple images mode
 }
 
@@ -373,7 +372,7 @@ func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.Name
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
 func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	// Always call underlying camera to get fresh images
-	images, meta, err := fc.cam.Images(ctx, extra)
+	images, meta, err := fc.cam.Images(ctx, nil, extra)
 	if err != nil {
 		return images, meta, err
 	}
@@ -411,7 +410,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	// We're outside capture window, so run filter checks to potentially start a new capture
 	for _, img := range images {
 		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
-		shouldSend, err := fc.shouldSend(ctx, img.Image, meta.CapturedAt)
+		shouldSend, err := fc.shouldSend(ctx, img, meta.CapturedAt)
 		if err != nil {
 			return nil, meta, err
 		}
@@ -437,7 +436,11 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now time.Time) (bool, error) {
+func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedImage, now time.Time) (bool, error) {
+	img, err := namedImg.Image(ctx)
+	if err != nil {
+		return false, err
+	}
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {

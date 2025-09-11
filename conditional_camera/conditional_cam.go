@@ -7,7 +7,6 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
-	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
@@ -16,6 +15,8 @@ import (
 	"go.viam.com/rdk/services/generic"
 	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/utils"
+
+	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 
 	"github.com/viam-modules/filtered_camera"
 )
@@ -52,8 +53,8 @@ func (cfg *Config) Validate(path string) ([]string, []string, error) {
 		return nil, nil, utils.NewConfigValidationError(path,
 			errors.New("none of window_seconds, window_seconds_after, or window_seconds_before can be negative"))
 	} else if cfg.WindowSeconds > 0 && (cfg.WindowSecondsBefore > 0 || cfg.WindowSecondsAfter > 0) {
-			return nil, nil, utils.NewConfigValidationError(path,
-				errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
+		return nil, nil, utils.NewConfigValidationError(path,
+			errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
 	}
 
 	return []string{cfg.Camera, cfg.FilterSvc}, nil, nil
@@ -118,10 +119,10 @@ func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra m
 		return nil, camera.ImageMetadata{}, err
 	}
 
-	return filtered_camera.ImagesToImage(ctx, ni, mimeType)
+	return filtered_camera.ImagesToImage(ctx, ni)
 }
 
-func (cc *conditionalCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+func (cc *conditionalCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return cc.images(ctx, extra, false) // false indicates multiple images mode
 }
 
@@ -139,7 +140,7 @@ func (cc *conditionalCamera) getBufferedImages(singleImageMode bool) ([]camera.N
 }
 
 func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	images, meta, err := cc.cam.Images(ctx, nil)
+	images, meta, err := cc.cam.Images(ctx, nil, nil)
 	if err != nil {
 		return images, meta, err
 	}
