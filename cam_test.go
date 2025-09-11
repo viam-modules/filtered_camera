@@ -1045,6 +1045,24 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	test.That(t, duplicateFound, test.ShouldBeFalse)
 }
 
+func assertTimestampsMatch(t *testing.T, got string, want time.Time) {
+	t.Helper()
+	const timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+	// Parse out the timestamp from the SourceName (format: "[timestamp]_color")
+	t.Logf("got source name: %s", got)
+	timestampStr, _, found := strings.Cut(got, "_")
+	test.That(t, found, test.ShouldBeTrue)
+	parsedTime, err := time.Parse(timestampFormat, timestampStr)
+	test.That(t, err, test.ShouldBeNil)
+	// Truncate both times to millisecond precision for comparison
+	parsedTimeMs := parsedTime.Truncate(time.Millisecond)
+	expectedTimeMs := want.Truncate(time.Millisecond)
+	t.Logf("parsed timestamp: %s", parsedTimeMs)
+	t.Logf("expected timestamp: %s", expectedTimeMs)
+	// Compare timestamps - they should be equal
+	test.That(t, parsedTimeMs.Equal(expectedTimeMs), test.ShouldBeTrue)
+}
+
 func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 	// This test verifies that when we're within a capture window but ToSend buffer is empty,
 	// the current images returned get properly timestamped with format "[timestamp]_[original_name]"
@@ -1110,6 +1128,9 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err1, test.ShouldBeNil)
 	test.That(t, len(images1), test.ShouldEqual, 2) // secondsBefore is 2, should have two sent to Capture
+	// lets make sure those timestamps are correct
+	assertTimestampsMatch(t, images1[0].SourceName, baseTime.Add(time.Duration(4)*time.Second))
+	assertTimestampsMatch(t, images1[1].SourceName, baseTime.Add(time.Duration(5)*time.Second))
 
 	// Step 3: Clear ToSend buffer to simulate the race condition scenario
 	fc.buf.ClearToSend()
@@ -1129,18 +1150,7 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 	test.That(t, returnedImage.SourceName, test.ShouldNotEqual, "color")                   // Should NOT be raw "color"
 	test.That(t, strings.HasSuffix(returnedImage.SourceName, "_color"), test.ShouldBeTrue) // Should end with "_color"
 
-	// Parse out the timestamp from the SourceName (format: "[timestamp]_color")
-	timestampStr := strings.TrimSuffix(returnedImage.SourceName, "_color")
-	const timestampFormat = "2006-01-02T15:04:05.000Z07:00"
-	parsedTime, err := time.Parse(timestampFormat, timestampStr)
-	test.That(t, err, test.ShouldBeNil)
-	// The expected time should be the CapturedAt time from the metadata
-	expectedTime := finalMeta.CapturedAt
-	// Truncate both times to millisecond precision for comparison
-	parsedTimeMs := parsedTime.Truncate(time.Millisecond)
-	expectedTimeMs := expectedTime.Truncate(time.Millisecond)
-	// Compare timestamps - they should be equal
-	test.That(t, parsedTimeMs.Equal(expectedTimeMs), test.ShouldBeTrue)
+	assertTimestampsMatch(t, returnedImage.SourceName, finalMeta.CapturedAt)
 }
 
 func TestMultipleTriggerWindows(t *testing.T) {
