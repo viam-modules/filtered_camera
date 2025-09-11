@@ -75,6 +75,24 @@ func getDummyVisionService() vision.Service {
 	return svc
 }
 
+func assertTimestampsMatch(t *testing.T, got string, want time.Time) {
+	t.Helper()
+	const timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+	// Parse out the timestamp from the SourceName (format: "[timestamp]_color")
+	t.Logf("got source name: %s", got)
+	timestampStr, _, found := strings.Cut(got, "_")
+	test.That(t, found, test.ShouldBeTrue)
+	parsedTime, err := time.Parse(timestampFormat, timestampStr)
+	test.That(t, err, test.ShouldBeNil)
+	// Truncate both times to millisecond precision for comparison
+	parsedTimeMs := parsedTime.Truncate(time.Millisecond)
+	expectedTimeMs := want.Truncate(time.Millisecond)
+	t.Logf("parsed timestamp: %s", parsedTimeMs)
+	t.Logf("expected timestamp: %s", expectedTimeMs)
+	// Compare timestamps - they should be equal
+	test.That(t, parsedTimeMs.Equal(expectedTimeMs), test.ShouldBeTrue)
+}
+
 func TestShouldSend(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 
@@ -516,17 +534,23 @@ func TestImagesWithBufferedImages(t *testing.T) {
 
 	// Manually populate ring buffer with historical images
 	baseTime := time.Now().Add(-5 * time.Second) // 5 seconds ago
+	expectedTimes := []time.Time{
+		baseTime.Add(-2 * time.Second),
+		baseTime.Add(-1 * time.Second),
+		baseTime,
+	}
+
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: a, SourceName: "buffered_img_1"},
-	}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-2 * time.Second)})
+	}, resource.ResponseMetadata{CapturedAt: expectedTimes[0]})
 
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: b, SourceName: "buffered_img_2"},
-	}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-1 * time.Second)})
+	}, resource.ResponseMetadata{CapturedAt: expectedTimes[1]})
 
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: c, SourceName: "buffered_img_3"},
-	}, resource.ResponseMetadata{CapturedAt: baseTime})
+	}, resource.ResponseMetadata{CapturedAt: expectedTimes[2]})
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
@@ -538,9 +562,11 @@ func TestImagesWithBufferedImages(t *testing.T) {
 	// Should get all buffered images (with timestamp naming)
 	test.That(t, len(res), test.ShouldEqual, 3)
 
-	// Verify images have timestamp prefixes (format: [timestamp]_[original_name])
-	for _, img := range res {
+	// Verify images have timestamp prefixes and correct timestamps
+	for i, img := range res {
 		test.That(t, strings.Contains(img.SourceName, "_buffered_img_"), test.ShouldBeTrue)
+		// Verify timestamps match expected capture times
+		assertTimestampsMatch(t, img.SourceName, expectedTimes[i])
 	}
 
 	test.That(t, meta, test.ShouldNotBeNil)
@@ -854,6 +880,9 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 		test.That(t, actualNumber, test.ShouldEqual, expectedNumber)
 		// Also verify it has timestamp prefix format
 		test.That(t, strings.Contains(img.SourceName, "_img_"), test.ShouldBeTrue)
+		// Verify timestamps match expected capture times
+		expectedTime := baseTime.Add(time.Duration(11+i) * time.Second) // img_11 = baseTime + 11s, img_12 = baseTime + 12s
+		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0) // Should be empty after PopAllToSend
 
@@ -886,6 +915,9 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 		test.That(t, actualNumber, test.ShouldEqual, expectedNumber)
 		// Also verify it has timestamp prefix format
 		test.That(t, strings.Contains(img.SourceName, "_img_"), test.ShouldBeTrue)
+		// Verify timestamps match expected capture times
+		expectedTime := baseTime.Add(time.Duration(14+i) * time.Second) // img_14 = baseTime + 14s, img_15 = baseTime + 15s
+		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 
 	// Ticks 17-20: Background captures
@@ -979,6 +1011,10 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	t.Logf("First trigger returned %d images:", len(images1))
 	for i, img := range images1 {
 		t.Logf("  [%d]: %s", i, img.SourceName)
+		// Verify timestamp matches the expected capture time
+		// Images should start from img_6 (baseTime + 7s) onwards
+		expectedTime := baseTime.Add(time.Duration(7+i) * time.Second)
+		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 
 	// Let capture window continue for a few more images (should go to ToSend directly)
@@ -993,6 +1029,10 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	t.Logf("First window continued returned %d images:", len(images1_continued))
 	for i, img := range images1_continued {
 		t.Logf("  [%d]: %s", i, img.SourceName)
+		// Verify timestamp matches the expected capture time
+		// These should be img_17, img_18 (baseTime + 18s, baseTime + 19s)
+		expectedTime := baseTime.Add(time.Duration(18+i) * time.Second)
+		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 
 	// Wait for first capture window to end, then trigger second window
@@ -1043,6 +1083,96 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 
 	// The test should pass - no duplicates with the original logic
 	test.That(t, duplicateFound, test.ShouldBeFalse)
+}
+
+func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
+	// This test verifies that when we're within a capture window but ToSend buffer is empty,
+	// the current images returned get properly timestamped with format "[timestamp]_[original_name]"
+
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	// Create camera that returns images with "color" as SourceName
+	imagesCam := inject.NewCamera("test_camera")
+	captureCount := 0
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		captureCount++
+		currentTime := baseTime.Add(time.Duration(captureCount) * time.Second)
+		return []camera.NamedImage{
+				{Image: image.NewRGBA(image.Rect(0, 0, 10, 10)), SourceName: "color"}, // Raw "color" SourceName
+			}, resource.ResponseMetadata{
+				CapturedAt: currentTime,
+			}, nil
+	}
+
+	// Create vision service that always triggers (for easy window setup)
+	visionSvc := inject.NewVisionService("test_vision")
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.9, "person"), // Above 0.8 threshold - triggers
+		}, nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications:     map[string]float64{"person": 0.8},
+			WindowSecondsBefore: 2,   // 2 seconds before trigger
+			WindowSecondsAfter:  3,   // 3 seconds after trigger
+			ImageFrequency:      1.0, // 1 Hz
+			Debug:               true,
+		},
+		logger:                   logger,
+		cam:                      imagesCam,
+		otherVisionServices:      []vision.Service{visionSvc},
+		acceptedClassifications:  map[string]map[string]float64{"test_vision": {"person": 0.8}},
+		acceptedObjects:          map[string]map[string]float64{},
+		inhibitedClassifications: map[string]map[string]float64{},
+		inhibitedObjects:         map[string]map[string]float64{},
+		inhibitors:               []vision.Service{},
+	}
+
+	// Initialize image buffer
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+
+	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
+
+	// Step 1: Build up some ring buffer by capturing background images (simulate background worker)
+	for i := 0; i < 5; i++ {
+		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
+	}
+
+	// Step 2: Trigger a capture window by calling Images() with data management context
+	// This should trigger because vision service returns confidence > 0.8
+	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err1, test.ShouldBeNil)
+	test.That(t, len(images1), test.ShouldEqual, 2) // secondsBefore is 2, should have two sent to Capture
+	// lets make sure those timestamps are correct
+	assertTimestampsMatch(t, images1[0].SourceName, baseTime.Add(time.Duration(4)*time.Second))
+	assertTimestampsMatch(t, images1[1].SourceName, baseTime.Add(time.Duration(5)*time.Second))
+
+	// Step 3: Clear ToSend buffer to simulate the race condition scenario
+	fc.buf.ClearToSend()
+
+	// Verify ToSend buffer is empty
+	toSendLen := fc.buf.GetToSendLength()
+	test.That(t, toSendLen, test.ShouldEqual, 0)
+
+	// Step 4: Call Images() while within capture window but ToSend buffer is empty
+	// This should trigger the code path: fc.buf.IsWithinCaptureWindow() == true, but getBufferedImages() returns false
+	finalImages, finalMeta, err2 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err2, test.ShouldBeNil)
+	test.That(t, len(finalImages), test.ShouldEqual, 1)
+
+	// Step 6: Verify the returned image has timestamped SourceName, not raw "color"
+	returnedImage := finalImages[0]
+	test.That(t, returnedImage.SourceName, test.ShouldNotEqual, "color")                   // Should NOT be raw "color"
+	test.That(t, strings.HasSuffix(returnedImage.SourceName, "_color"), test.ShouldBeTrue) // Should end with "_color"
+
+	assertTimestampsMatch(t, returnedImage.SourceName, finalMeta.CapturedAt)
 }
 
 func TestMultipleTriggerWindows(t *testing.T) {
@@ -1128,4 +1258,109 @@ func TestMultipleTriggerWindows(t *testing.T) {
 	for i, expected := range expectedTrigger {
 		test.That(t, fc.buf.GetToSendSlice()[i].Meta.CapturedAt, test.ShouldEqual, expected)
 	}
+}
+
+func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
+	// This test specifically verifies that the same images never appear in multiple GetImages() calls.
+	// This would have caught the original bug where images remained in RingBuffer after being sent,
+	// causing the same images to be returned across multiple data capture requests.
+
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	// Create camera that returns images with predictable names
+	imagesCam := inject.NewCamera("test_camera")
+	timeCount := 0
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		timeCount++
+		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
+		return []camera.NamedImage{
+				{Image: image.NewRGBA(image.Rect(0, 0, 10, 10)), SourceName: fmt.Sprintf("img_%d", timeCount)},
+			}, resource.ResponseMetadata{
+				CapturedAt: imageTime,
+			}, nil
+	}
+
+	// Create vision service that always triggers
+	visionSvc := inject.NewVisionService("test_vision")
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.9, "person"), // Always triggers
+		}, nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications:     map[string]float64{"person": 0.8},
+			WindowSecondsBefore: 15, // 15 seconds before
+			WindowSecondsAfter:  2,  // 2 seconds after
+			ImageFrequency:      1.0,
+			Debug:               true,
+		},
+		logger:                   logger,
+		cam:                      imagesCam,
+		otherVisionServices:      []vision.Service{visionSvc},
+		acceptedClassifications:  map[string]map[string]float64{"test_vision": {"person": 0.8}},
+		acceptedObjects:          map[string]map[string]float64{},
+		inhibitedClassifications: map[string]map[string]float64{},
+		inhibitedObjects:         map[string]map[string]float64{},
+		inhibitors:               []vision.Service{},
+	}
+
+	// Initialize image buffer
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+
+	// Add data management context
+	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
+
+	// Build up ring buffer with several images
+	for i := 0; i < 20; i++ {
+		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
+	}
+
+	// Track all images returned across multiple GetImages() calls
+	allReturnedImages := make(map[string]int) // image name -> count
+
+	// First GetImages() call - should trigger and return historical images (15 from windows before)
+	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err1, test.ShouldBeNil)
+	test.That(t, len(images1), test.ShouldEqual, 15)
+
+	// Add more images to continue capture window
+	for i := 0; i < 3; i++ {
+		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
+	}
+
+	// Second GetImages() call - should return continuing images from the same trigger window, there would have been an overlap
+	images2, _, err2 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err2, test.ShouldBeNil)
+	test.That(t, len(images2), test.ShouldEqual, 3)
+
+	// Wait for capture window to end
+	for i := 0; i < 20; i++ {
+		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
+	}
+
+	// Third GetImages() call - should trigger a new capture window with a fresh set of before images, plus the 2 left over from the previous "after" window
+	images3, _, err3 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err3, test.ShouldBeNil)
+	test.That(t, len(images3), test.ShouldEqual, 17)
+
+	// The critical test, verify no image appears more than once across all GetImages() calls
+	duplicateFound := false
+	for imageName, count := range allReturnedImages {
+		if count > 1 {
+			duplicateFound = true
+			t.Logf("Duplicate Found: Image %s was returned %d times across different GetImages() calls", imageName, count)
+		}
+	}
+	test.That(t, duplicateFound, test.ShouldBeFalse)
 }

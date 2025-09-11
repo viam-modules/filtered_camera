@@ -78,6 +78,7 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 
 	// Send images from the ring buffer and continue collecting for windowDuration
 	var imagesToSend []CachedData
+	var remainingRingBuffer []CachedData
 
 	// Create a map of existing timestamps in ToSend for O(1) lookup
 	existingTimes := make(map[int64]bool)
@@ -92,8 +93,15 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
 				imagesToSend = append(imagesToSend, cached)
 			}
+			// if its a duplicate, then discard it
+		} else {
+			// Outside capture window, keep in ring buffer
+			remainingRingBuffer = append(remainingRingBuffer, cached)
 		}
 	}
+
+	// Update ring buffer to exclude images that were added to ToSend
+	ib.ringBuffer = remainingRingBuffer
 
 	// Add the images to send
 	ib.toSend = append(ib.toSend, imagesToSend...)
@@ -160,7 +168,7 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	ib.toSend = ib.toSend[1:]
 
 	// Apply timestamp naming to the images
-	x.Imgs = timestampImagesToNames(x.Imgs, x.Meta)
+	x.Imgs = TimestampImagesToNames(x.Imgs, x.Meta)
 
 	if ib.debug {
 		remainingLen := len(ib.toSend)
@@ -172,8 +180,8 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 	return x, true
 }
 
-// timestampImagesToNames converts images to have timestamp-based names in format "[timestamp]_[original_name]"
-func timestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMetadata) []camera.NamedImage {
+// TimestampImagesToNames converts images to have timestamp-based names in format "[timestamp]_[original_name]"
+func TimestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMetadata) []camera.NamedImage {
 	result := make([]camera.NamedImage, len(images))
 	for i, img := range images {
 		result[i] = img // Copy the image
@@ -209,7 +217,7 @@ func (ib *ImageBuffer) PopAllToSend() ([]camera.NamedImage, resource.ResponseMet
 
 	for i, cached := range ib.toSend {
 		// Apply timestamp to each image in this cached data
-		timestampedImages := timestampImagesToNames(cached.Imgs, cached.Meta)
+		timestampedImages := TimestampImagesToNames(cached.Imgs, cached.Meta)
 		allImages = append(allImages, timestampedImages...)
 
 		// Use the earliest timestamp as the metadata for the batch
