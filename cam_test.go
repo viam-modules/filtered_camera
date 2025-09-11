@@ -1294,8 +1294,8 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 	fc := &filteredCamera{
 		conf: &Config{
 			Classifications:     map[string]float64{"person": 0.8},
-			WindowSecondsBefore: 3, // 3 seconds before
-			WindowSecondsAfter:  2, // 2 seconds after
+			WindowSecondsBefore: 15, // 15 seconds before
+			WindowSecondsAfter:  2,  // 2 seconds after
 			ImageFrequency:      1.0,
 			Debug:               true,
 		},
@@ -1316,7 +1316,7 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
 	// Build up ring buffer with several images
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 20; i++ {
 		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
 		test.That(t, err, test.ShouldBeNil)
 		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
@@ -1328,7 +1328,7 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 	// First GetImages() call - should trigger and return historical images (3 from windows before)
 	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err1, test.ShouldBeNil)
-	test.That(t, len(images1), test.ShouldEqual, 3)
+	test.That(t, len(images1), test.ShouldEqual, 15)
 
 	// Add more images to continue capture window
 	for i := 0; i < 3; i++ {
@@ -1343,16 +1343,16 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 	test.That(t, len(images2), test.ShouldEqual, 3)
 
 	// Wait for capture window to end
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 20; i++ {
 		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
 		test.That(t, err, test.ShouldBeNil)
 		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
 	}
 
-	// Third GetImages() call - should trigger a new capture window with different images
+	// Third GetImages() call - should trigger a new capture window with a fresh set of before images, plus the 2 left over from the previous "after" window
 	images3, _, err3 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err3, test.ShouldBeNil)
-	test.That(t, len(images3), test.ShouldEqual, 5)
+	test.That(t, len(images3), test.ShouldEqual, 17)
 
 	// The critical test, verify no image appears more than once across all GetImages() calls
 	duplicateFound := false
