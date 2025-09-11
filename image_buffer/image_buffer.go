@@ -92,10 +92,6 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 			// Check if this image is already in ToSend to avoid duplicates
 			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
 				imagesToSend = append(imagesToSend, cached)
-				// Don't add to remaining buffer - this image will be sent and should not be reused
-			} else {
-				// Already in ToSend, keep in ring buffer for potential future windows
-				remainingRingBuffer = append(remainingRingBuffer, cached)
 			}
 			// if its a duplicate, then discard it
 		} else {
