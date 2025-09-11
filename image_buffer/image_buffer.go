@@ -78,6 +78,7 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 
 	// Send images from the ring buffer and continue collecting for windowDuration
 	var imagesToSend []CachedData
+	var remainingRingBuffer []CachedData
 
 	// Create a map of existing timestamps in ToSend for O(1) lookup
 	existingTimes := make(map[int64]bool)
@@ -91,9 +92,19 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 			// Check if this image is already in ToSend to avoid duplicates
 			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
 				imagesToSend = append(imagesToSend, cached)
+				// Don't add to remaining buffer - this image will be sent and should not be reused
+			} else {
+				// Already in ToSend, keep in ring buffer for potential future windows
+				remainingRingBuffer = append(remainingRingBuffer, cached)
 			}
+		} else {
+			// Outside capture window, keep in ring buffer
+			remainingRingBuffer = append(remainingRingBuffer, cached)
 		}
 	}
+
+	// Update ring buffer to exclude images that were added to ToSend
+	ib.ringBuffer = remainingRingBuffer
 
 	// Add the images to send
 	ib.toSend = append(ib.toSend, imagesToSend...)

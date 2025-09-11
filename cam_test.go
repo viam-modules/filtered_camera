@@ -1259,3 +1259,108 @@ func TestMultipleTriggerWindows(t *testing.T) {
 		test.That(t, fc.buf.GetToSendSlice()[i].Meta.CapturedAt, test.ShouldEqual, expected)
 	}
 }
+
+func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
+	// This test specifically verifies that the same images never appear in multiple GetImages() calls.
+	// This would have caught the original bug where images remained in RingBuffer after being sent,
+	// causing the same images to be returned across multiple data capture requests.
+
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	// Create camera that returns images with predictable names
+	imagesCam := inject.NewCamera("test_camera")
+	timeCount := 0
+	imagesCam.ImagesFunc = func(ctx context.Context, extra map[string]interface{}) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		timeCount++
+		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
+		return []camera.NamedImage{
+				{Image: image.NewRGBA(image.Rect(0, 0, 10, 10)), SourceName: fmt.Sprintf("img_%d", timeCount)},
+			}, resource.ResponseMetadata{
+				CapturedAt: imageTime,
+			}, nil
+	}
+
+	// Create vision service that always triggers
+	visionSvc := inject.NewVisionService("test_vision")
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.9, "person"), // Always triggers
+		}, nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications:     map[string]float64{"person": 0.8},
+			WindowSecondsBefore: 3, // 3 seconds before
+			WindowSecondsAfter:  2, // 2 seconds after
+			ImageFrequency:      1.0,
+			Debug:               true,
+		},
+		logger:                   logger,
+		cam:                      imagesCam,
+		otherVisionServices:      []vision.Service{visionSvc},
+		acceptedClassifications:  map[string]map[string]float64{"test_vision": {"person": 0.8}},
+		acceptedObjects:          map[string]map[string]float64{},
+		inhibitedClassifications: map[string]map[string]float64{},
+		inhibitedObjects:         map[string]map[string]float64{},
+		inhibitors:               []vision.Service{},
+	}
+
+	// Initialize image buffer
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+
+	// Add data management context
+	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
+
+	// Build up ring buffer with several images
+	for i := 0; i < 8; i++ {
+		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
+	}
+
+	// Track all images returned across multiple GetImages() calls
+	allReturnedImages := make(map[string]int) // image name -> count
+
+	// First GetImages() call - should trigger and return historical images (3 from windows before)
+	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err1, test.ShouldBeNil)
+	test.That(t, len(images1), test.ShouldEqual, 3)
+
+	// Add more images to continue capture window
+	for i := 0; i < 3; i++ {
+		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
+	}
+
+	// Second GetImages() call - should return continuing images from the same trigger window, there would have been an overlap
+	images2, _, err2 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err2, test.ShouldBeNil)
+	test.That(t, len(images2), test.ShouldEqual, 3)
+
+	// Wait for capture window to end
+	for i := 0; i < 5; i++ {
+		bgImages, bgMeta, err := fc.cam.Images(ctx, nil)
+		test.That(t, err, test.ShouldBeNil)
+		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
+	}
+
+	// Third GetImages() call - should trigger a new capture window with different images
+	images3, _, err3 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err3, test.ShouldBeNil)
+	test.That(t, len(images3), test.ShouldEqual, 5)
+
+	// The critical test, verify no image appears more than once across all GetImages() calls
+	duplicateFound := false
+	for imageName, count := range allReturnedImages {
+		if count > 1 {
+			duplicateFound = true
+			t.Logf("Duplicate Found: Image %s was returned %d times across different GetImages() calls", imageName, count)
+		}
+	}
+	test.That(t, duplicateFound, test.ShouldBeFalse)
+}
