@@ -75,6 +75,24 @@ func getDummyVisionService() vision.Service {
 	return svc
 }
 
+func assertTimestampsMatch(t *testing.T, got string, want time.Time) {
+	t.Helper()
+	const timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+	// Parse out the timestamp from the SourceName (format: "[timestamp]_color")
+	t.Logf("got source name: %s", got)
+	timestampStr, _, found := strings.Cut(got, "_")
+	test.That(t, found, test.ShouldBeTrue)
+	parsedTime, err := time.Parse(timestampFormat, timestampStr)
+	test.That(t, err, test.ShouldBeNil)
+	// Truncate both times to millisecond precision for comparison
+	parsedTimeMs := parsedTime.Truncate(time.Millisecond)
+	expectedTimeMs := want.Truncate(time.Millisecond)
+	t.Logf("parsed timestamp: %s", parsedTimeMs)
+	t.Logf("expected timestamp: %s", expectedTimeMs)
+	// Compare timestamps - they should be equal
+	test.That(t, parsedTimeMs.Equal(expectedTimeMs), test.ShouldBeTrue)
+}
+
 func TestShouldSend(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 
@@ -854,6 +872,9 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 		test.That(t, actualNumber, test.ShouldEqual, expectedNumber)
 		// Also verify it has timestamp prefix format
 		test.That(t, strings.Contains(img.SourceName, "_img_"), test.ShouldBeTrue)
+		// Verify timestamps match expected capture times
+		expectedTime := baseTime.Add(time.Duration(11+i) * time.Second) // img_11 = baseTime + 11s, img_12 = baseTime + 12s
+		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0) // Should be empty after PopAllToSend
 
@@ -886,6 +907,9 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 		test.That(t, actualNumber, test.ShouldEqual, expectedNumber)
 		// Also verify it has timestamp prefix format
 		test.That(t, strings.Contains(img.SourceName, "_img_"), test.ShouldBeTrue)
+		// Verify timestamps match expected capture times
+		expectedTime := baseTime.Add(time.Duration(14+i) * time.Second) // img_14 = baseTime + 14s, img_15 = baseTime + 15s
+		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 
 	// Ticks 17-20: Background captures
@@ -979,6 +1003,10 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	t.Logf("First trigger returned %d images:", len(images1))
 	for i, img := range images1 {
 		t.Logf("  [%d]: %s", i, img.SourceName)
+		// Verify timestamp matches the expected capture time
+		// Images should start from img_6 (baseTime + 7s) onwards
+		expectedTime := baseTime.Add(time.Duration(7+i) * time.Second)
+		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 
 	// Let capture window continue for a few more images (should go to ToSend directly)
@@ -993,6 +1021,10 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	t.Logf("First window continued returned %d images:", len(images1_continued))
 	for i, img := range images1_continued {
 		t.Logf("  [%d]: %s", i, img.SourceName)
+		// Verify timestamp matches the expected capture time
+		// These should be img_17, img_18 (baseTime + 18s, baseTime + 19s)
+		expectedTime := baseTime.Add(time.Duration(18+i) * time.Second)
+		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 
 	// Wait for first capture window to end, then trigger second window
@@ -1043,24 +1075,6 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 
 	// The test should pass - no duplicates with the original logic
 	test.That(t, duplicateFound, test.ShouldBeFalse)
-}
-
-func assertTimestampsMatch(t *testing.T, got string, want time.Time) {
-	t.Helper()
-	const timestampFormat = "2006-01-02T15:04:05.000Z07:00"
-	// Parse out the timestamp from the SourceName (format: "[timestamp]_color")
-	t.Logf("got source name: %s", got)
-	timestampStr, _, found := strings.Cut(got, "_")
-	test.That(t, found, test.ShouldBeTrue)
-	parsedTime, err := time.Parse(timestampFormat, timestampStr)
-	test.That(t, err, test.ShouldBeNil)
-	// Truncate both times to millisecond precision for comparison
-	parsedTimeMs := parsedTime.Truncate(time.Millisecond)
-	expectedTimeMs := want.Truncate(time.Millisecond)
-	t.Logf("parsed timestamp: %s", parsedTimeMs)
-	t.Logf("expected timestamp: %s", expectedTimeMs)
-	// Compare timestamps - they should be equal
-	test.That(t, parsedTimeMs.Equal(expectedTimeMs), test.ShouldBeTrue)
 }
 
 func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
