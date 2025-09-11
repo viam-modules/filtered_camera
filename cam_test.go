@@ -534,17 +534,23 @@ func TestImagesWithBufferedImages(t *testing.T) {
 
 	// Manually populate ring buffer with historical images
 	baseTime := time.Now().Add(-5 * time.Second) // 5 seconds ago
+	expectedTimes := []time.Time{
+		baseTime.Add(-2 * time.Second),
+		baseTime.Add(-1 * time.Second),
+		baseTime,
+	}
+
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: a, SourceName: "buffered_img_1"},
-	}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-2 * time.Second)})
+	}, resource.ResponseMetadata{CapturedAt: expectedTimes[0]})
 
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: b, SourceName: "buffered_img_2"},
-	}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-1 * time.Second)})
+	}, resource.ResponseMetadata{CapturedAt: expectedTimes[1]})
 
 	fc.buf.AddToRingBuffer([]camera.NamedImage{
 		{Image: c, SourceName: "buffered_img_3"},
-	}, resource.ResponseMetadata{CapturedAt: baseTime})
+	}, resource.ResponseMetadata{CapturedAt: expectedTimes[2]})
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
@@ -556,9 +562,11 @@ func TestImagesWithBufferedImages(t *testing.T) {
 	// Should get all buffered images (with timestamp naming)
 	test.That(t, len(res), test.ShouldEqual, 3)
 
-	// Verify images have timestamp prefixes (format: [timestamp]_[original_name])
-	for _, img := range res {
+	// Verify images have timestamp prefixes and correct timestamps
+	for i, img := range res {
 		test.That(t, strings.Contains(img.SourceName, "_buffered_img_"), test.ShouldBeTrue)
+		// Verify timestamps match expected capture times
+		assertTimestampsMatch(t, img.SourceName, expectedTimes[i])
 	}
 
 	test.That(t, meta, test.ShouldNotBeNil)
