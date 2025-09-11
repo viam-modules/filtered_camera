@@ -1325,7 +1325,7 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 	// Track all images returned across multiple GetImages() calls
 	allReturnedImages := make(map[string]int) // image name -> count
 
-	// First GetImages() call - should trigger and return historical images (3 from windows before)
+	// First GetImages() call - should trigger and return historical images (15 from windows before)
 	images1, _, err1 := fc.Images(ctx, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err1, test.ShouldBeNil)
 	test.That(t, len(images1), test.ShouldEqual, 15)
