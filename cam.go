@@ -167,6 +167,11 @@ func init() {
 					}
 				}
 			}
+			fc.logger.Infof("Valid classifications: %v", fc.acceptedClassifications)
+			fc.logger.Infof("Inhibited classifications: %v", fc.inhibitedClassifications)
+			fc.logger.Infof("Valid objects: %v", fc.acceptedObjects)
+			fc.logger.Infof("Inhibited objects: %v", fc.inhibitedObjects)
+
 			fc.acceptedStats.startTime = time.Now()
 			fc.rejectedStats.startTime = time.Now()
 
@@ -442,12 +447,14 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				fc.logger.Debugf("error getting inhibited classifications")
+				fc.logger.Infof("error getting inhibited classifications")
 				return false, err
 			}
 
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with classifications %v", res)
+				fc.logger.Infof("rejecting image with classifications %v", res)
 				fc.rejectedStats.update(label.Label())
 				return false, nil
 			}
@@ -457,12 +464,14 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
 				fc.logger.Debugf("error getting inhibited detections")
+				fc.logger.Infof("error getting inhibited detections")
 				return false, err
 			}
 
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with objects %v", res)
+				fc.logger.Infof("rejecting image with objects %v", res)
 				fc.rejectedStats.update(label.Label())
 				return false, nil
 			}
@@ -474,12 +483,14 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				fc.logger.Debugf("error getting non-inhibited classifications")
+				fc.logger.Infof("error getting non-inhibited classifications")
 				return false, err
 			}
 
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
+				fc.logger.Infof("keeping image with classifications %v", res)
 				fc.acceptedStats.update(label.Label())
 				return true, nil
 			}
@@ -489,6 +500,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
 				fc.logger.Debugf("error getting non-inhibited detections")
+				fc.logger.Infof("error getting non-inhibited detections")
 				return false, err
 			}
 
