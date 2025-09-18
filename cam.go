@@ -480,10 +480,12 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now t
 
 	for _, vs := range fc.otherVisionServices {
 		if len(fc.acceptedClassifications[vs.Name().Name]) > 0 {
+			fc.logger.Infof("Vision Service: %s", vs.Name().Name)
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				fc.logger.Debugf("error getting non-inhibited classifications")
 				fc.logger.Infof("error getting non-inhibited classifications")
+				fc.logger.Errorf("THE ERROR: %v", err)
 				return false, err
 			}
 
