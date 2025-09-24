@@ -46,8 +46,8 @@ func TestWindow(t *testing.T) {
 
 	buf.MarkShouldSend(time.Now())
 
-	// Test that the ring buffer still contains images (not cleared like old Buffer)
-	test.That(t, buf.GetRingBufferLength(), test.ShouldEqual, 3)
+	// Test that the ring buffer now only contains images that were NOT sent (c was outside window)
+	test.That(t, buf.GetRingBufferLength(), test.ShouldEqual, 1)
 	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 2)
 	toSendSlice = buf.GetToSendSlice()
 	test.That(t, b, test.ShouldEqual, toSendSlice[0].Meta.CapturedAt)
@@ -85,8 +85,8 @@ func TestWindowBoundaries(t *testing.T) {
 
 	buf.MarkShouldSend(time.Now())
 
-	// Test that the ring buffer still contains images (not cleared like old Buffer)
-	test.That(t, buf.GetRingBufferLength(), test.ShouldEqual, 3)
+	// Test that the ring buffer now only contains images that were NOT sent (c was outside window)
+	test.That(t, buf.GetRingBufferLength(), test.ShouldEqual, 1)
 	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 2)
 	toSendSlice = buf.GetToSendSlice()
 	test.That(t, b, test.ShouldEqual, toSendSlice[0].Meta.CapturedAt)

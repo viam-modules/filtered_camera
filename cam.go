@@ -395,7 +395,9 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 			return bufferedImages, bufferedMeta, nil
 		}
 		// If no buffered images, return current image (we're in capture mode)
-		return images, meta, nil
+		// Apply timestamp to current images for consistency
+		timestampedImages := imagebuffer.TimestampImagesToNames(images, meta)
+		return timestampedImages, meta, nil
 	}
 
 	if fc.conf.Debug {
