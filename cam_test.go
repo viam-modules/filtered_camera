@@ -284,6 +284,15 @@ func TestValidate(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldResemble, []string{"foo", "foo"})
 
+	// should error if WindowSeconds, WindowSecondsBefore, and WindowSecondsAfter are all zero
+	conf.WindowSeconds = 0
+	res, _, err = conf.Validate(".")
+	test.That(t, res, test.ShouldBeNil)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot all be zero")
+	conf.WindowSeconds = 10 // set it back to previous value
+
+
 	// should error if both vision and vision_service are set
 	conf.VisionServices = []VisionServiceConfig{
 		{
