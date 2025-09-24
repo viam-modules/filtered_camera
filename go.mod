@@ -5,9 +5,9 @@ go 1.23.8
 require (
 	github.com/pkg/errors v0.9.1
 	github.com/rhysd/actionlint v1.7.7
-	go.viam.com/rdk v0.90.0
+	go.viam.com/rdk v0.92.0
 	go.viam.com/test v1.2.4
-	go.viam.com/utils v0.1.163
+	go.viam.com/utils v0.1.166
 )
 
 require (
@@ -83,7 +83,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect
 	github.com/improbable-eng/grpc-web v0.15.0 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.4.6 // indirect
 	github.com/jhump/protoreflect v1.15.6 // indirect
@@ -173,7 +173,7 @@ require (
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	go.viam.com/api v0.1.473 // indirect
+	go.viam.com/api v0.1.475 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230525183740-e7c30c78aeb2 // indirect
 	goji.io v2.0.2+incompatible // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
