@@ -343,7 +343,7 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 }
 
 func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := fc.images(ctx, extra, true) // true indicates single image mode
+	ni, _, err := fc.images(ctx, nil, extra, true) // true indicates single image mode
 	if err != nil {
 		return nil, camera.ImageMetadata{}, err
 	}
@@ -352,7 +352,7 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 }
 
 func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return fc.images(ctx, extra, false) // false indicates multiple images mode
+	return fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
 }
 
 // getBufferedImages returns images from the ToSend buffer depending on the image mode.
@@ -375,9 +375,9 @@ func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.Name
 // images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
 // It then returns the next image or images present in the ToSend buffer back to the client / data manager
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
-func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	// Always call underlying camera to get fresh images
-	images, meta, err := fc.cam.Images(ctx, nil, extra)
+	images, meta, err := fc.cam.Images(ctx, filterSourceNames, extra)
 	if err != nil {
 		return images, meta, err
 	}
