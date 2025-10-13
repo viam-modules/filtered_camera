@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
 	"time"
 
 	"go.viam.com/rdk/components/camera"
@@ -69,6 +68,11 @@ func (cfg *Config) Validate(path string) ([]string, []string, error) {
 
 	if cfg.ImageFrequency < 0 {
 		return nil, nil, utils.NewConfigValidationError(path, errors.New("image_frequency cannot be less than 0"))
+	}
+
+	if cfg.WindowSeconds == 0 && cfg.WindowSecondsBefore == 0 && cfg.WindowSecondsAfter == 0 {
+		return nil, nil, utils.NewConfigValidationError(path,
+			errors.New("window_seconds, window_seconds_after, and window_seconds_before cannot all be zero"))
 	}
 
 	if cfg.WindowSeconds < 0 || cfg.WindowSecondsBefore < 0 || cfg.WindowSecondsAfter < 0 {
@@ -325,7 +329,7 @@ func (fc *filteredCamera) Close(ctx context.Context) error {
 }
 
 func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
-	images, meta, err := fc.cam.Images(ctx, nil)
+	images, meta, err := fc.cam.Images(ctx, nil, nil)
 	if err != nil {
 		fc.logger.Debugf("Error capturing image in background: %v", err)
 		return
@@ -339,16 +343,16 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 }
 
 func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := fc.images(ctx, extra, true) // true indicates single image mode
+	ni, _, err := fc.images(ctx, nil, extra, true) // true indicates single image mode
 	if err != nil {
 		return nil, camera.ImageMetadata{}, err
 	}
 
-	return ImagesToImage(ctx, ni, mimeType)
+	return ImagesToImage(ctx, ni)
 }
 
-func (fc *filteredCamera) Images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return fc.images(ctx, extra, false) // false indicates multiple images mode
+func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	return fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
 }
 
 // getBufferedImages returns images from the ToSend buffer depending on the image mode.
@@ -371,9 +375,9 @@ func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.Name
 // images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
 // It then returns the next image or images present in the ToSend buffer back to the client / data manager
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
-func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	// Always call underlying camera to get fresh images
-	images, meta, err := fc.cam.Images(ctx, extra)
+	images, meta, err := fc.cam.Images(ctx, filterSourceNames, extra)
 	if err != nil {
 		return images, meta, err
 	}
@@ -411,7 +415,7 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	// We're outside capture window, so run filter checks to potentially start a new capture
 	for _, img := range images {
 		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
-		shouldSend, err := fc.shouldSend(ctx, img.Image, meta.CapturedAt)
+		shouldSend, err := fc.shouldSend(ctx, img, meta.CapturedAt)
 		if err != nil {
 			return nil, meta, err
 		}
@@ -437,7 +441,11 @@ func (fc *filteredCamera) images(ctx context.Context, extra map[string]interface
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now time.Time) (bool, error) {
+func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedImage, now time.Time) (bool, error) {
+	img, err := namedImg.Image(ctx)
+	if err != nil {
+		return false, err
+	}
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
