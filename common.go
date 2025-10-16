@@ -27,10 +27,20 @@ func ImagesToImage(ctx context.Context, ni []camera.NamedImage) ([]byte, camera.
 	if len(ni) == 0 {
 		return nil, camera.ImageMetadata{}, errors.New("NamedImage slice is empty, nothing to turn into an Image")
 	}
-	data, err := ni[0].Bytes(ctx)
+	bytes, err := ni[0].Bytes(ctx)
 	if err != nil {
 		return nil, camera.ImageMetadata{}, err
 	}
 
-	return data, camera.ImageMetadata{MimeType: ni[0].MimeType()}, nil
+	// Pass in annotations per image.
+	// The other option is to add annotations to the NamedImage struct.
+	// This is just a placeholder since I don't know where exactly in the
+	// pipeline the annotations will be added.
+	return bytes, camera.ImageMetadata{
+		MimeType: ni[0].MimeType(),
+		Annotations: data.Annotations{
+			Classifications: []data.Classification{
+				{Label: "test_filtered_cam", Confidence: new(float64)},
+			},
+		}}, nil
 }
