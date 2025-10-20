@@ -9,7 +9,7 @@ import (
 	"go.viam.com/rdk/resource"
 )
 
-var Family = resource.ModelNamespace("viam").WithFamily("camera")
+var Family = resource.ModelNamespace("tahiya").WithFamily("camera")
 
 func IsFromDataMgmt(ctx context.Context, extra map[string]interface{}) bool {
 	if ctx.Value(data.FromDMContextKey{}) == true {

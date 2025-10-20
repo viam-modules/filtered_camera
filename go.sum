@@ -910,6 +910,8 @@ github.com/viamrobotics/evdev v0.1.3 h1:mR4HFafvbc5Wx4Vp1AUJp6/aITfVx9AKyXWx+rWj
 github.com/viamrobotics/evdev v0.1.3/go.mod h1:N6nuZmPz7HEIpM7esNWwLxbYzqWqLSZkfI/1Sccckqk=
 github.com/viamrobotics/ice/v2 v2.3.40 h1:H9r4ztsKkxWSn42R4fLvYlaPtpBys1Yj7/MERBtZY0k=
 github.com/viamrobotics/ice/v2 v2.3.40/go.mod h1:MFqB81U1pliDKaXJx2hGHvYKg1PepyEYwEY10828Ve0=
+github.com/viamrobotics/rdk v0.97.1-0.20251020182845-44526be28204 h1:0JdlRu/IMts0JhduWMhYpctYGW2skblBX4xMg9vS+NI=
+github.com/viamrobotics/rdk v0.97.1-0.20251020182845-44526be28204/go.mod h1:+u0C4/muUnRsLT5qXfmu9D+Ze6dHrr70QeU84iDE33w=
 github.com/viamrobotics/webrtc/v3 v3.99.16 h1:N3OQoWnV9Zg68mTDOq8ymsx2AMpbEjuo1gHWaVd7wB0=
 github.com/viamrobotics/webrtc/v3 v3.99.16/go.mod h1:w1LmHsQFaq7vqLh06ybQ5kmYXo8myQq+3Pj073RL0f0=
 github.com/viamrobotics/zeroconf v1.0.12 h1:y0AaDnBmELvtKKzJlnRBivZ4KWYXWXyGv73SY16sXUw=
@@ -1003,8 +1005,6 @@ go.uber.org/zap v1.27.0 h1:aJMhYGrd5QSmlpLMr2MftRKl7t8J8PTZPA732ud/XR8=
 go.uber.org/zap v1.27.0/go.mod h1:GB2qFLM7cTU87MWRP2mPIjqfIDnGu+VIO4V/SdhGo2E=
 go.viam.com/api v0.1.477 h1:huAOmn3iejrRapzlYSyB3R0S47itXTUkQ3+kt0Yx02I=
 go.viam.com/api v0.1.477/go.mod h1:p/am76zx8SZ74V/F4rEAYQIpHaaLUwJgY2q3Uw3FIWk=
-go.viam.com/rdk v0.97.1-0.20251015181606-26e3cde2fcde h1:3Kb1k/pTmDRO9vtVRsiB8Ymlg/Dmm+5fn2Lh1eiKbwU=
-go.viam.com/rdk v0.97.1-0.20251015181606-26e3cde2fcde/go.mod h1:+u0C4/muUnRsLT5qXfmu9D+Ze6dHrr70QeU84iDE33w=
 go.viam.com/test v1.2.4 h1:JYgZhsuGAQ8sL9jWkziAXN9VJJiKbjoi9BsO33TW3ug=
 go.viam.com/test v1.2.4/go.mod h1:zI2xzosHdqXAJ/kFqcN+OIF78kQuTV2nIhGZ8EzvaJI=
 go.viam.com/utils v0.1.173 h1:2decDVTwJ2zhDubWOz1PV4zU8n1cUBXLqWShGdJHGSg=

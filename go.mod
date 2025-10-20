@@ -208,4 +208,4 @@ require (
 	periph.io/x/host/v3 v3.8.1-0.20230331112814-9f0d9f7d76db // indirect
 )
 
-replace go.viam.com/rdk => go.viam.com/rdk v0.97.1-0.20251015181606-26e3cde2fcde // DATA-4768
+replace go.viam.com/rdk => github.com/viamrobotics/rdk v0.97.1-0.20251020182845-44526be28204
