@@ -209,3 +209,5 @@ require (
 )
 
 replace go.viam.com/rdk => github.com/viamrobotics/rdk v0.97.1-0.20251021163559-95be61ac7213 // DATA-4768
+
+replace go.viam.com/api => go.viam.com/api v0.1.482-0.20251015154957-2e1c8df49beb // DATA-4768
