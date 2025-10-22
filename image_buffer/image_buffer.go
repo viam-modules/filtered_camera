@@ -195,7 +195,7 @@ func TimestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMe
 		}
 
 		// Format: [timestamp]_[original_name]
-		result[i].SourceName = timestampStr + "_" + "random_source_name"
+		result[i].SourceName = timestampStr + "_" + img.SourceName
 		// Pass in annotations per image.
 		// This is just a placeholder since I don't know where exactly in the
 		// pipeline the annotations will be added.
