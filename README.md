@@ -145,7 +145,9 @@ To build and use the `filtered_camera` module locally:
 
 If your smart machine captures a lot of data, you can conditionally capture data to selectively store only the data that meets certain criteria.
 
-The conditional camera module allows you to filter image data by using a generic filter service as input.  When the input filter service returns "result": True, an image is provided from the underlying camera. When "result": False, no image is produced.
+The conditional camera module expects an existing generic service as input.  This generic service, which has a single DoCommand(), is used as a filter for the conditional camera.  The logic of the generic filter service is yours to create and can depend on sensors, motor positions, or anything else you can imagine! All that matters is that the DoCommand of your filter service returns "result": False or "result": True.  
+
+The conditional camera module uses the result to filter image data from the underlying camera.  When the input filter service returns "result": True, an image is provided from the underlying camera. When "result": False, no image is produced.
 
 This allows you to:
 
