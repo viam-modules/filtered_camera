@@ -7,7 +7,7 @@ require (
 	github.com/rhysd/actionlint v1.7.7
 	go.viam.com/rdk v0.96.0
 	go.viam.com/test v1.2.4
-	go.viam.com/utils v0.1.171
+	go.viam.com/utils v0.1.173
 )
 
 require (
@@ -207,3 +207,7 @@ require (
 	periph.io/x/conn/v3 v3.7.0 // indirect
 	periph.io/x/host/v3 v3.8.1-0.20230331112814-9f0d9f7d76db // indirect
 )
+
+replace go.viam.com/rdk => github.com/viamrobotics/rdk v0.97.1-0.20251021163559-95be61ac7213 // DATA-4768
+
+replace go.viam.com/api => go.viam.com/api v0.1.482-0.20251015154957-2e1c8df49beb // DATA-4768
