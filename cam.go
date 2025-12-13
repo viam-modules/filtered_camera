@@ -420,6 +420,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 			return nil, meta, err
 		}
 		if shouldSend {
+			fc.logger.Infof("eliot temp: %v", annotations)
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
 
