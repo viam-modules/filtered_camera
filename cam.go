@@ -451,7 +451,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
-				fc.logger.Debugf("error getting inhibited classifications")
+				fc.logger.Warnf("error getting inhibited classifications")
 				return false, err
 			}
 
@@ -466,7 +466,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 		if len(fc.inhibitedObjects[vs.Name().Name]) > 0 {
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
-				fc.logger.Debugf("error getting inhibited detections")
+				fc.logger.Warnf("error getting inhibited detections")
 				return false, err
 			}
 
@@ -483,7 +483,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 		if len(fc.acceptedClassifications[vs.Name().Name]) > 0 {
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
-				fc.logger.Debugf("error getting non-inhibited classifications")
+				fc.logger.Warnf("error getting non-inhibited classifications")
 				return false, err
 			}
 
@@ -498,7 +498,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 		if len(fc.acceptedObjects[vs.Name().Name]) > 0 {
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
-				fc.logger.Debugf("error getting non-inhibited detections")
+				fc.logger.Warnf("error getting non-inhibited detections")
 				return false, err
 			}
 
