@@ -439,6 +439,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 			}
 
 			if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+				fc.logger.Infof("eliot2 temp: %v", bufferedImages[i].Annotations)
 				return bufferedImages, bufferedMeta, nil
 			}
 
