@@ -422,7 +422,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 	}
 
 	// We're outside capture window, so run filter checks to potentially start a new capture
-	for i, img := range images {
+	for _, img := range images {
 		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
 		shouldSend, annotations, err := fc.shouldSend(ctx, img, meta.CapturedAt)
 		if err != nil {
