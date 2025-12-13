@@ -11,18 +11,6 @@ import (
 )
 
 func TestIsFromDataMgmt(t *testing.T) {
-	t.Run("context with FromDMContextKey true", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), data.FromDMContextKey{}, true)
-		result := IsFromDataMgmt(ctx, nil)
-		test.That(t, result, test.ShouldBeTrue)
-	})
-
-	t.Run("context with FromDMContextKey false", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), data.FromDMContextKey{}, false)
-		result := IsFromDataMgmt(ctx, nil)
-		test.That(t, result, test.ShouldBeFalse)
-	})
-
 	t.Run("extra with FromDMString true", func(t *testing.T) {
 		ctx := context.Background()
 		extra := map[string]interface{}{
@@ -37,6 +25,19 @@ func TestIsFromDataMgmt(t *testing.T) {
 		extra := map[string]interface{}{
 			data.FromDMString: false,
 		}
+		result := IsFromDataMgmt(ctx, extra)
+		test.That(t, result, test.ShouldBeFalse)
+	})
+
+	t.Run("nil extra returns false", func(t *testing.T) {
+		ctx := context.Background()
+		result := IsFromDataMgmt(ctx, nil)
+		test.That(t, result, test.ShouldBeFalse)
+	})
+
+	t.Run("empty extra returns false", func(t *testing.T) {
+		ctx := context.Background()
+		extra := map[string]interface{}{}
 		result := IsFromDataMgmt(ctx, extra)
 		test.That(t, result, test.ShouldBeFalse)
 	})
@@ -58,7 +59,7 @@ func TestImagesToImage(t *testing.T) {
 		ctx := context.Background()
 
 		img := image.NewRGBA(image.Rect(0, 0, 10, 10))
-		testImage, err := camera.NamedImageFromImage(img, "test", "image/jpeg")
+		testImage, err := camera.NamedImageFromImage(img, "test", "image/jpeg", data.Annotations{})
 		test.That(t, err, test.ShouldBeNil)
 
 		namedImages := []camera.NamedImage{testImage}
@@ -76,9 +77,9 @@ func TestImagesToImage(t *testing.T) {
 		// Create two test images
 		img1 := image.NewRGBA(image.Rect(0, 0, 10, 10))
 		img2 := image.NewRGBA(image.Rect(0, 0, 20, 20))
-		testImage1, err := camera.NamedImageFromImage(img1, "first", "image/jpeg")
+		testImage1, err := camera.NamedImageFromImage(img1, "first", "image/jpeg", data.Annotations{})
 		test.That(t, err, test.ShouldBeNil)
-		testImage2, err := camera.NamedImageFromImage(img2, "second", "image/png")
+		testImage2, err := camera.NamedImageFromImage(img2, "second", "image/png", data.Annotations{})
 		test.That(t, err, test.ShouldBeNil)
 
 		namedImages := []camera.NamedImage{testImage1, testImage2}

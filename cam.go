@@ -413,15 +413,29 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 	}
 
 	// We're outside capture window, so run filter checks to potentially start a new capture
-	for _, img := range images {
+	for i, img := range images {
 		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
-		shouldSend, err := fc.shouldSend(ctx, img, meta.CapturedAt)
+		shouldSend, annotations, err := fc.shouldSend(ctx, img, meta.CapturedAt)
 		if err != nil {
 			return nil, meta, err
 		}
 		if shouldSend {
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
+
+			// If we have annotations, create an annotated version of the trigger image
+			// and store it in the buffer
+			if !annotations.Empty() {
+				annotatedImg, err := createAnnotatedImage(ctx, img, annotations)
+				if err != nil {
+					fc.logger.Warnf("failed to create annotated image: %v", err)
+				} else {
+					// Replace the trigger image with the annotated version
+					images[i] = annotatedImg
+					// Store the annotated trigger image in the buffer
+					fc.buf.StoreImages([]camera.NamedImage{annotatedImg}, meta, meta.CapturedAt)
+				}
+			}
 
 			if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
 				return bufferedImages, bufferedMeta, nil
@@ -441,10 +455,10 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedImage, now time.Time) (bool, error) {
+func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedImage, now time.Time) (bool, data.Annotations, error) {
 	img, err := namedImg.Image(ctx)
 	if err != nil {
-		return false, err
+		return false, data.Annotations{}, err
 	}
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
@@ -452,14 +466,14 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting inhibited classifications")
-				return false, err
+				return false, data.Annotations{}, err
 			}
 
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with classifications %v", res)
 				fc.rejectedStats.update(label.Label())
-				return false, nil
+				return false, data.Annotations{}, nil
 			}
 		}
 
@@ -467,14 +481,14 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting inhibited detections")
-				return false, err
+				return false, data.Annotations{}, err
 			}
 
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with objects %v", res)
 				fc.rejectedStats.update(label.Label())
-				return false, nil
+				return false, data.Annotations{}, nil
 			}
 		}
 	}
@@ -484,14 +498,15 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 			res, err := vs.Classifications(ctx, img, 100, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting non-inhibited classifications")
-				return false, err
+				return false, data.Annotations{}, err
 			}
 
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
 				fc.acceptedStats.update(label.Label())
-				return true, nil
+				annotations := classificationsToAnnotations(res)
+				return true, annotations, nil
 			}
 		}
 
@@ -499,29 +514,73 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 			res, err := vs.Detections(ctx, img, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting non-inhibited detections")
-				return false, err
+				return false, data.Annotations{}, err
 			}
 
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
 				fc.acceptedStats.update(label.Label())
-				return true, nil
+				annotations := detectionsToAnnotations(res)
+				return true, annotations, nil
 			}
 		}
 	}
 	if len(fc.otherVisionServices) == 0 {
 		fc.acceptedStats.update("no vision services triggered")
 		fc.logger.Debugf("defaulting to true")
-		return true, nil
+		return true, data.Annotations{}, nil
 	}
 	fc.rejectedStats.update("no vision services triggered")
 	fc.logger.Debugf("defaulting to false")
-	return false, nil
+	return false, data.Annotations{}, nil
 }
 
-func (fc *filteredCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
-	return nil, fmt.Errorf("filteredCamera doesn't support pointclouds yes")
+func classificationsToAnnotations(cs []classification.Classification) data.Annotations {
+	annotations := data.Annotations{
+		Classifications: make([]data.Classification, 0, len(cs)),
+	}
+	for _, c := range cs {
+		score := c.Score()
+		annotations.Classifications = append(annotations.Classifications, data.Classification{
+			Label:      c.Label(),
+			Confidence: &score,
+		})
+	}
+	return annotations
+}
+
+func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
+	annotations := data.Annotations{
+		BoundingBoxes: make([]data.BoundingBox, 0, len(ds)),
+	}
+	for _, d := range ds {
+		score := d.Score()
+		bbox := d.NormalizedBoundingBox()
+		if len(bbox) == 4 {
+			annotations.BoundingBoxes = append(annotations.BoundingBoxes, data.BoundingBox{
+				Label:          d.Label(),
+				Confidence:     &score,
+				XMinNormalized: bbox[0],
+				YMinNormalized: bbox[1],
+				XMaxNormalized: bbox[2],
+				YMaxNormalized: bbox[3],
+			})
+		}
+	}
+	return annotations
+}
+
+func createAnnotatedImage(ctx context.Context, img camera.NamedImage, annotations data.Annotations) (camera.NamedImage, error) {
+	rawImg, err := img.Image(ctx)
+	if err != nil {
+		return camera.NamedImage{}, err
+	}
+	return camera.NamedImageFromImage(rawImg, img.SourceName, img.MimeType(), annotations)
+}
+
+func (fc *filteredCamera) NextPointCloud(ctx context.Context, extra map[string]interface{}) (pointcloud.PointCloud, error) {
+	return nil, fmt.Errorf("filteredCamera doesn't support pointclouds yet")
 }
 
 func (fc *filteredCamera) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {

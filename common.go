@@ -12,10 +12,6 @@ import (
 var Family = resource.ModelNamespace("viam").WithFamily("camera")
 
 func IsFromDataMgmt(ctx context.Context, extra map[string]interface{}) bool {
-	if ctx.Value(data.FromDMContextKey{}) == true {
-		return true
-	}
-
 	if extra != nil && extra[data.FromDMString] == true {
 		return true
 	}
