@@ -1,6 +1,9 @@
 on:
   release:
     types: [published]
+  push:
+    tags:
+      - "*"
 
 # This regex matches either a semver (e.g. 1.2.3)
 # or a release candidate in one of these forms:
