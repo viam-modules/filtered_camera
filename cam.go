@@ -419,24 +419,15 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 		if err != nil {
 			return nil, meta, err
 		}
+		img.Annotations.BoundingBoxes = annotations.BoundingBoxes
+		img.Annotations.Classifications = annotations.Classifications
 		if shouldSend {
 			fc.logger.Infof("eliot temp: %v", annotations)
+
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
 
-			// If we have annotations, create an annotated version of the trigger image
-			// and store it in the buffer
-			if !annotations.Empty() {
-				annotatedImg, err := createAnnotatedImage(ctx, img, annotations)
-				if err != nil {
-					fc.logger.Warnf("failed to create annotated image: %v", err)
-				} else {
-					// Replace the trigger image with the annotated version
-					images[i] = annotatedImg
-					// Store the annotated trigger image in the buffer
-					fc.buf.StoreImages([]camera.NamedImage{annotatedImg}, meta, meta.CapturedAt)
-				}
-			}
+			fc.buf.StoreImages([]camera.NamedImage{img}, meta, meta.CapturedAt)
 
 			if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
 				fc.logger.Infof("eliot2 temp: %v", bufferedImages[i].Annotations)
@@ -450,6 +441,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 	}
 	// No triggers met and we're outside capture window, but check if we have buffered images from previous triggers
 	if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+		fc.logger.Infof("eliot3 temp: %v", bufferedImages[0].Annotations)
 		return bufferedImages, bufferedMeta, nil
 	}
 
@@ -571,14 +563,6 @@ func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 		}
 	}
 	return annotations
-}
-
-func createAnnotatedImage(ctx context.Context, img camera.NamedImage, annotations data.Annotations) (camera.NamedImage, error) {
-	rawImg, err := img.Image(ctx)
-	if err != nil {
-		return camera.NamedImage{}, err
-	}
-	return camera.NamedImageFromImage(rawImg, img.SourceName, img.MimeType(), annotations)
 }
 
 func (fc *filteredCamera) NextPointCloud(ctx context.Context, extra map[string]interface{}) (pointcloud.PointCloud, error) {
