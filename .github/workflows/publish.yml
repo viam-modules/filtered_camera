@@ -3,8 +3,8 @@ on:
     tags:
       - "*"
 
+jobs:
   publish:
-    needs: validate-tag
     name: Build and Upload module 
     runs-on: ubuntu-latest
     steps:
