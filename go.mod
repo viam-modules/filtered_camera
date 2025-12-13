@@ -5,7 +5,7 @@ go 1.25.1
 require (
 	github.com/pkg/errors v0.9.1
 	github.com/rhysd/actionlint v1.7.8
-	go.viam.com/rdk v0.105.1-0.20251213032445-2f0fa10cb896
+	go.viam.com/rdk v0.105.1-0.20251213204917-2ff3c7d9ab45
 	go.viam.com/test v1.2.4
 	go.viam.com/utils v0.4.0
 )
