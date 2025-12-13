@@ -431,15 +431,12 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 		img.Annotations.BoundingBoxes = annotations.BoundingBoxes
 		img.Annotations.Classifications = annotations.Classifications
 		if shouldSend {
-			fc.logger.Infof("eliot temp: %v", annotations)
-
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt)
 
 			fc.buf.StoreImages([]camera.NamedImage{img}, meta, meta.CapturedAt)
 
 			if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
-				fc.logger.Infof("eliot2 temp: %v", bufferedImages[i].Annotations)
 				return bufferedImages, bufferedMeta, nil
 			}
 
@@ -450,7 +447,6 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 	}
 	// No triggers met and we're outside capture window, but check if we have buffered images from previous triggers
 	if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
-		fc.logger.Infof("eliot3 temp: %v", bufferedImages[0].Annotations)
 		return bufferedImages, bufferedMeta, nil
 	}
 
