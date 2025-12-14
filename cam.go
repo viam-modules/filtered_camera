@@ -256,13 +256,14 @@ func (fc *filteredCamera) formatStats() map[string]interface{} {
 	return stats
 }
 
-func (fc *filteredCamera) anyClassificationsMatch(visionService string, cs []classification.Classification, inhibit bool) (bool, classification.Classification) {
+func (fc *filteredCamera) anyClassificationsMatch(visionService string, cs []classification.Classification, inhibit bool) (bool, []classification.Classification) {
+	res := []classification.Classification{}
 	for _, c := range cs {
 		if fc.classificationMatches(visionService, c, inhibit) {
-			return true, c
+			res = append(res, c)
 		}
 	}
-	return false, nil
+	return len(res) > 0, res
 }
 
 func (fc *filteredCamera) classificationMatches(visionService string, c classification.Classification, inhibit bool) bool {
@@ -286,14 +287,15 @@ func (fc *filteredCamera) classificationMatches(visionService string, c classifi
 	return false
 }
 
-func (fc *filteredCamera) anyDetectionsMatch(visionService string, ds []objectdetection.Detection, inhibit bool) (bool, objectdetection.Detection) {
+func (fc *filteredCamera) anyDetectionsMatch(visionService string, ds []objectdetection.Detection, inhibit bool) (bool, []objectdetection.Detection) {
+	res := []objectdetection.Detection{}
 	for _, d := range ds {
 		if fc.detectionMatches(visionService, d, inhibit) {
-			return true, d
+			res = append(res, d)
 		}
 	}
 
-	return false, nil
+	return len(res) > 0, res
 }
 
 func (fc *filteredCamera) detectionMatches(visionService string, d objectdetection.Detection, inhibit bool) bool {
@@ -471,7 +473,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with classifications %v", res)
-				fc.rejectedStats.update(label.Label())
+				fc.rejectedStats.update(label[0].Label())
 				return false, data.Annotations{}, nil
 			}
 		}
@@ -486,7 +488,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with objects %v", res)
-				fc.rejectedStats.update(label.Label())
+				fc.rejectedStats.update(label[0].Label())
 				return false, data.Annotations{}, nil
 			}
 		}
@@ -500,11 +502,13 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 				return false, data.Annotations{}, err
 			}
 
-			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, false)
+			match, labels := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
-				fc.acceptedStats.update(label.Label())
-				annotations := classificationsToAnnotations(res)
+				for _, label := range labels {
+					fc.acceptedStats.update(label.Label())
+				}
+				annotations := classificationToAnnotations(labels)
 				return true, annotations, nil
 			}
 		}
@@ -516,11 +520,13 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 				return false, data.Annotations{}, err
 			}
 
-			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, false)
+			match, labels := fc.anyDetectionsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
-				fc.acceptedStats.update(label.Label())
-				annotations := detectionsToAnnotations(res)
+				for _, label := range labels {
+					fc.acceptedStats.update(label.Label())
+				}
+				annotations := detectionsToAnnotations(labels)
 				return true, annotations, nil
 			}
 		}
@@ -535,9 +541,9 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 	return false, data.Annotations{}, nil
 }
 
-func classificationsToAnnotations(cs []classification.Classification) data.Annotations {
+func classificationToAnnotations(cs []classification.Classification) data.Annotations {
 	annotations := data.Annotations{
-		Classifications: make([]data.Classification, 0, len(cs)),
+		Classifications: []data.Classification{},
 	}
 	for _, c := range cs {
 		score := c.Score()
@@ -552,6 +558,7 @@ func classificationsToAnnotations(cs []classification.Classification) data.Annot
 func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 	annotations := data.Annotations{
 		BoundingBoxes: make([]data.BoundingBox, 0, len(ds)),
+		Classifications: []data.Classification{},
 	}
 	for _, d := range ds {
 		score := d.Score()
@@ -566,6 +573,10 @@ func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 				YMaxNormalized: bbox[3],
 			})
 		}
+		annotations.Classifications = append(annotations.Classifications, data.Classification{
+			Label: d.Label(),
+			Confidence: &score,
+		})
 	}
 	return annotations
 }
