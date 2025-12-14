@@ -67,7 +67,7 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time, annotations data.An
 	defer ib.mu.Unlock()
 
 	ib.lastAnnotations = annotations
-	
+
 	// Add images from the ring buffer that are within the window
 	beforeTimeBoundary := time.Second * time.Duration(ib.windowSecondsBefore)
 	afterTimeBoundary := time.Second * time.Duration(ib.windowSecondsAfter)
@@ -303,7 +303,9 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
 	// else then store them in the ring buffer
 	if (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom) {
-		ib.toSend = append(ib.toSend, CachedData{Imgs: images, Meta: meta})
+		cd := CachedData{Imgs: images, Meta: meta}
+		ib.updateAnnotations(&cd)
+		ib.toSend = append(ib.toSend, cd)
 		toSendLen := len(ib.toSend)
 		if ib.debug {
 			ib.logger.Infow("StoreImages: stored image to ToSend buffer",
