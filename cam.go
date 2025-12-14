@@ -558,7 +558,6 @@ func classificationToAnnotations(cs []classification.Classification) data.Annota
 func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 	annotations := data.Annotations{
 		BoundingBoxes:   make([]data.BoundingBox, 0, len(ds)),
-		Classifications: []data.Classification{},
 	}
 	for _, d := range ds {
 		score := d.Score()
@@ -573,10 +572,6 @@ func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 				YMaxNormalized: bbox[3],
 			})
 		}
-		annotations.Classifications = append(annotations.Classifications, data.Classification{
-			Label:      d.Label(),
-			Confidence: &score,
-		})
 	}
 	return annotations
 }
