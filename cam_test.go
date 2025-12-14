@@ -721,7 +721,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 
 	// Manually trigger at time 5, which should capture images 3, 4, 5, 6, 7 (within 2 second window [3, 7])
 	triggerTime1 := baseTime.Add(5 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime1)
+	fc.buf.MarkShouldSend(triggerTime1, data.Annotations{})
 
 	// Should first capture images 3, 4, 5 (images in the before-trigger buffer)
 	expectedFirstTrigger := []time.Time{
@@ -753,7 +753,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 
 	// Manually trigger at time 10, which should capture images 8, 9, 10
 	triggerTime2 := baseTime.Add(10 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime2)
+	fc.buf.MarkShouldSend(triggerTime2, data.Annotations{})
 
 	// Should capture images 8, 9, 10
 	expectedTrigger := []time.Time{
@@ -1228,18 +1228,18 @@ func TestMultipleTriggerWindows(t *testing.T) {
 	}
 	// Manually trigger at time 5
 	triggerTime1 := baseTime.Add(5 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime1)
+	fc.buf.MarkShouldSend(triggerTime1, data.Annotations{})
 	// Now add more images, with additional triggers at 7 and 9
 	fc.captureImageInBackground(ctx) // 6
 	fc.captureImageInBackground(ctx) // 7
 	// Manually trigger at time 7
 	triggerTime2 := baseTime.Add(7 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime2)
+	fc.buf.MarkShouldSend(triggerTime2, data.Annotations{})
 	fc.captureImageInBackground(ctx) // 8
 	fc.captureImageInBackground(ctx) // 9
 	// Manually trigger at time 9
 	triggerTime3 := baseTime.Add(9 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime3)
+	fc.buf.MarkShouldSend(triggerTime3, data.Annotations{})
 	for i := 10; i <= 20; i++ {
 		fc.captureImageInBackground(ctx)
 	}

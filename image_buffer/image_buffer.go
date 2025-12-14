@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.viam.com/rdk/components/camera"
+	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 )
@@ -31,6 +32,7 @@ type ImageBuffer struct {
 	maxImages           int
 	logger              logging.Logger
 	debug               bool
+	lastAnnotations     data.Annotations
 	// toSendMaxWarningThreshold is the threshold for warning about ToSend buffer size
 	toSendMaxWarningThreshold int
 }
@@ -60,10 +62,12 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 	}
 }
 
-func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
+func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time, annotations data.Annotations) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 
+	ib.lastAnnotations = annotations
+	
 	// Add images from the ring buffer that are within the window
 	beforeTimeBoundary := time.Second * time.Duration(ib.windowSecondsBefore)
 	afterTimeBoundary := time.Second * time.Duration(ib.windowSecondsAfter)
@@ -91,6 +95,7 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 		if !cached.Meta.CapturedAt.Before(ib.captureFrom) && !cached.Meta.CapturedAt.After(ib.captureTill) {
 			// Check if this image is already in ToSend to avoid duplicates
 			if !existingTimes[cached.Meta.CapturedAt.UnixNano()] {
+				ib.updateAnnotations(&cached)
 				imagesToSend = append(imagesToSend, cached)
 			}
 			// if its a duplicate, then discard it
@@ -325,6 +330,14 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 				"method", "StoreImages",
 				"withinCaptureWindow", false,
 				"ringBufferSize", len(ib.ringBuffer))
+		}
+	}
+}
+
+func (ib *ImageBuffer) updateAnnotations(cd *CachedData) {
+	for i, img := range cd.Imgs {
+		if len(img.Annotations.BoundingBoxes) == 0 && len(img.Annotations.Classifications) == 0 {
+			cd.Imgs[i].Annotations = ib.lastAnnotations
 		}
 	}
 }
