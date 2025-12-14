@@ -350,20 +350,11 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 		return nil, camera.ImageMetadata{}, err
 	}
 
-	data, md, err := ImagesToImage(ctx, ni)
-	fc.logger.Infof("eliota: %v", md.Annotations)
-	return data, md, err
+	return ImagesToImage(ctx, ni)
 }
 
 func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	imgs, rm, err := fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
-	if err != nil {
-		return nil, rm, err
-	}
-	if len(imgs) > 0 {
-		fc.logger.Infof("eliotb: %v", imgs[0].Annotations)
-	}
-	return imgs, rm, err
+	return fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
 }
 
 // getBufferedImages returns images from the ToSend buffer depending on the image mode.
