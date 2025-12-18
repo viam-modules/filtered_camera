@@ -520,8 +520,8 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 	return false, nil
 }
 
-func (fc *filteredCamera) NextPointCloud(ctx context.Context) (pointcloud.PointCloud, error) {
-	return nil, fmt.Errorf("filteredCamera doesn't support pointclouds yes")
+func (fc *filteredCamera) NextPointCloud(ctx context.Context, _ map[string]interface{}) (pointcloud.PointCloud, error) {
+	return nil, fmt.Errorf("filteredCamera doesn't support pointclouds yet")
 }
 
 func (fc *filteredCamera) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {

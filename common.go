@@ -12,7 +12,7 @@ import (
 var Family = resource.ModelNamespace("tahiya").WithFamily("camera")
 
 func IsFromDataMgmt(ctx context.Context, extra map[string]interface{}) bool {
-	if ctx.Value(data.FromDMContextKey{}) == true {
+	if extra[data.FromDMString] == true == true {
 		return true
 	}
 

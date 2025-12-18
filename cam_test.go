@@ -43,12 +43,12 @@ var (
 	f = image.NewGray(image.Rect(6, 1, 1, 1))
 
 	// Named image versions for the new API
-	namedA, _ = camera.NamedImageFromImage(a, "", "image/jpeg")
-	namedB, _ = camera.NamedImageFromImage(b, "", "image/jpeg")
-	namedC, _ = camera.NamedImageFromImage(c, "", "image/jpeg")
-	namedD, _ = camera.NamedImageFromImage(d, "", "image/jpeg")
-	namedE, _ = camera.NamedImageFromImage(e, "", "image/jpeg")
-	namedF, _ = camera.NamedImageFromImage(f, "", "image/jpeg")
+	namedA, _ = camera.NamedImageFromImage(a, "", "image/jpeg", data.Annotations{})
+	namedB, _ = camera.NamedImageFromImage(b, "", "image/jpeg", data.Annotations{})
+	namedC, _ = camera.NamedImageFromImage(c, "", "image/jpeg", data.Annotations{})
+	namedD, _ = camera.NamedImageFromImage(d, "", "image/jpeg", data.Annotations{})
+	namedE, _ = camera.NamedImageFromImage(e, "", "image/jpeg", data.Annotations{})
+	namedF, _ = camera.NamedImageFromImage(f, "", "image/jpeg", data.Annotations{})
 )
 
 func getDummyVisionService() vision.Service {
@@ -292,7 +292,6 @@ func TestValidate(t *testing.T) {
 	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot all be zero")
 	conf.WindowSeconds = 10 // set it back to previous value
 
-
 	// should error if both vision and vision_service are set
 	conf.VisionServices = []VisionServiceConfig{
 		{
@@ -406,9 +405,9 @@ func TestImage(t *testing.T) {
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-				imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg")
-				imgB, _ := camera.NamedImageFromImage(b, "", "image/jpeg")
-				imgC, _ := camera.NamedImageFromImage(c, "", "image/jpeg")
+				imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg", data.Annotations{})
+				imgB, _ := camera.NamedImageFromImage(b, "", "image/jpeg", data.Annotations{})
+				imgC, _ := camera.NamedImageFromImage(c, "", "image/jpeg", data.Annotations{})
 				return []camera.NamedImage{imgA, imgB, imgC}, resource.ResponseMetadata{CapturedAt: time.Now()}, nil
 			},
 		},
@@ -496,10 +495,10 @@ func TestImageWithBufferedImages(t *testing.T) {
 
 	// Manually populate ring buffer with historical images
 	baseTime := time.Now().Add(-5 * time.Second) // 5 seconds ago
-	img1, _ := camera.NamedImageFromImage(a, "buffered_img_1", "image/jpeg")
+	img1, _ := camera.NamedImageFromImage(a, "buffered_img_1", "image/jpeg", data.Annotations{})
 	fc.buf.AddToRingBuffer([]camera.NamedImage{img1}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-2 * time.Second)})
 
-	img2, _ := camera.NamedImageFromImage(b, "buffered_img_2", "image/jpeg")
+	img2, _ := camera.NamedImageFromImage(b, "buffered_img_2", "image/jpeg", data.Annotations{})
 	fc.buf.AddToRingBuffer([]camera.NamedImage{img2}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-1 * time.Second)})
 
 	ctx := context.Background()
@@ -535,7 +534,7 @@ func TestImagesWithBufferedImages(t *testing.T) {
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-				img, _ := camera.NamedImageFromImage(a, "trigger_img", "image/jpeg")
+				img, _ := camera.NamedImageFromImage(a, "trigger_img", "image/jpeg", data.Annotations{})
 				return []camera.NamedImage{img}, resource.ResponseMetadata{CapturedAt: time.Now()}, nil
 			},
 		},
@@ -551,13 +550,13 @@ func TestImagesWithBufferedImages(t *testing.T) {
 		baseTime,
 	}
 
-	img1, _ := camera.NamedImageFromImage(a, "buffered_img_1", "image/jpeg")
+	img1, _ := camera.NamedImageFromImage(a, "buffered_img_1", "image/jpeg", data.Annotations{})
 	fc.buf.AddToRingBuffer([]camera.NamedImage{img1}, resource.ResponseMetadata{CapturedAt: expectedTimes[0]})
 
-	img2, _ := camera.NamedImageFromImage(b, "buffered_img_2", "image/jpeg")
+	img2, _ := camera.NamedImageFromImage(b, "buffered_img_2", "image/jpeg", data.Annotations{})
 	fc.buf.AddToRingBuffer([]camera.NamedImage{img2}, resource.ResponseMetadata{CapturedAt: expectedTimes[1]})
 
-	img3, _ := camera.NamedImageFromImage(c, "buffered_img_3", "image/jpeg")
+	img3, _ := camera.NamedImageFromImage(c, "buffered_img_3", "image/jpeg", data.Annotations{})
 	fc.buf.AddToRingBuffer([]camera.NamedImage{img3}, resource.ResponseMetadata{CapturedAt: expectedTimes[2]})
 
 	ctx := context.Background()
@@ -629,9 +628,9 @@ func TestDoCommand(t *testing.T) {
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-				imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg")
-				imgB, _ := camera.NamedImageFromImage(b, "", "image/jpeg")
-				imgC, _ := camera.NamedImageFromImage(c, "", "image/jpeg")
+				imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg", data.Annotations{})
+				imgB, _ := camera.NamedImageFromImage(b, "", "image/jpeg", data.Annotations{})
+				imgC, _ := camera.NamedImageFromImage(c, "", "image/jpeg", data.Annotations{})
 				return []camera.NamedImage{imgA, imgB, imgC}, resource.ResponseMetadata{}, nil
 			},
 		},
@@ -799,10 +798,10 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 		[]camera.NamedImage, resource.ResponseMetadata, error) {
 		timeCount++
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
-		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg")
+		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg", data.Annotations{})
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
-				CapturedAt: imageTime,
-			}, nil
+			CapturedAt: imageTime,
+		}, nil
 	}
 
 	// Create vision service that initially doesn't trigger (below threshold)
@@ -956,8 +955,8 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
 		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg")
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
-				CapturedAt: imageTime,
-			}, nil
+			CapturedAt: imageTime,
+		}, nil
 	}
 
 	// Create vision service that triggers when we want it to
@@ -1107,8 +1106,8 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 		currentTime := baseTime.Add(time.Duration(captureCount) * time.Second)
 		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), "color", "image/jpeg")
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
-				CapturedAt: currentTime,
-			}, nil
+			CapturedAt: currentTime,
+		}, nil
 	}
 
 	// Create vision service that always triggers (for easy window setup)
@@ -1280,10 +1279,10 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 		[]camera.NamedImage, resource.ResponseMetadata, error) {
 		timeCount++
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
-		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg")
+		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg", data.Annotations{})
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
-				CapturedAt: imageTime,
-			}, nil
+			CapturedAt: imageTime,
+		}, nil
 	}
 
 	// Create vision service that always triggers
