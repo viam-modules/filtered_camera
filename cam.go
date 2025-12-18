@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"math"
 	"time"
 
 	"go.viam.com/rdk/components/camera"
@@ -16,6 +18,8 @@ import (
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
 	"go.viam.com/utils"
+
+	"github.com/erh/vmodutils/imgutils"
 
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 )
@@ -37,6 +41,8 @@ type Config struct {
 
 	Classifications map[string]float64
 	Objects         map[string]float64
+
+	ImageDedupeThreshold float64 `json:"image_dedpue_threshold"`
 }
 
 type VisionServiceConfig struct {
@@ -212,6 +218,8 @@ type filteredCamera struct {
 	acceptedObjects          map[string]map[string]float64
 	acceptedStats            imageStats
 	rejectedStats            imageStats
+
+	lastSentImages []image.Image
 }
 
 type imageStats struct {
@@ -414,16 +422,33 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 			"withinCaptureWindow", false)
 	}
 
+	for len(fc.lastSentImages) < len(images) {
+		fc.lastSentImages = append(fc.lastSentImages, nil)
+	}
+
 	// We're outside capture window, so run filter checks to potentially start a new capture
-	for _, img := range images {
+	for idx, img := range images {
+
+		realImg, err := img.Image(ctx)
+
+		if fc.conf.ImageDedupeThreshold > 0 && fc.lastSentImages[idx] != nil {
+			a := imgutils.ComputeGrayscaleAverage(fc.lastSentImages[idx])
+			b := imgutils.ComputeGrayscaleAverage(realImg)
+			if math.Abs(a-b) < fc.conf.ImageDedupeThreshold {
+				continue
+			}
+		}
+
 		// method fc.shouldSend will return true if a filter passes (and inhibit doesn't)
-		shouldSend, annotations, err := fc.shouldSend(ctx, img, meta.CapturedAt)
+		shouldSend, annotations, err := fc.shouldSend(ctx, realImg, meta.CapturedAt)
 		if err != nil {
 			return nil, meta, err
 		}
 		img.Annotations.BoundingBoxes = annotations.BoundingBoxes
 		img.Annotations.Classifications = annotations.Classifications
 		if shouldSend {
+			fc.lastSentImages[idx] = realImg
+
 			// this updates the CaptureTill time to be further in the future
 			fc.buf.MarkShouldSend(meta.CapturedAt, annotations)
 
@@ -436,6 +461,8 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 			// Don't return the trigger image to maintain chronological order
 			// Represents the edge case where triggering is happening faster than the buffer can be filled
 			return nil, meta, data.ErrNoCaptureToStore
+		} else {
+			fc.lastSentImages[idx] = nil
 		}
 	}
 	// No triggers met and we're outside capture window, but check if we have buffered images from previous triggers
@@ -447,11 +474,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 	return nil, meta, data.ErrNoCaptureToStore
 }
 
-func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedImage, now time.Time) (bool, data.Annotations, error) {
-	img, err := namedImg.Image(ctx)
-	if err != nil {
-		return false, data.Annotations{}, err
-	}
+func (fc *filteredCamera) shouldSend(ctx context.Context, img image.Image, now time.Time) (bool, data.Annotations, error) {
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
@@ -548,7 +571,7 @@ func classificationToAnnotations(cs []classification.Classification) data.Annota
 
 func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 	annotations := data.Annotations{
-		BoundingBoxes:   make([]data.BoundingBox, 0, len(ds)),
+		BoundingBoxes: make([]data.BoundingBox, 0, len(ds)),
 	}
 	for _, d := range ds {
 		score := d.Score()
