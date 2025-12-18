@@ -167,7 +167,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 			return nil, meta, err
 		}
 		if shouldSend {
-			cc.buf.MarkShouldSend(meta.CapturedAt)
+			cc.buf.MarkShouldSend(meta.CapturedAt, data.Annotations{})
 		}
 	}
 

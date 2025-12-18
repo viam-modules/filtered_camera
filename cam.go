@@ -350,20 +350,11 @@ func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[
 		return nil, camera.ImageMetadata{}, err
 	}
 
-	data, md, err := ImagesToImage(ctx, ni)
-	fc.logger.Infof("eliota: %v", md.Annotations)
-	return data, md, err
+	return ImagesToImage(ctx, ni)
 }
 
 func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	imgs, rm, err := fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
-	if err != nil {
-		return nil, rm, err
-	}
-	if len(imgs) > 0 {
-		fc.logger.Infof("eliotb: %v", imgs[0].Annotations)
-	}
-	return imgs, rm, err
+	return fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
 }
 
 // getBufferedImages returns images from the ToSend buffer depending on the image mode.
@@ -434,7 +425,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 		img.Annotations.Classifications = annotations.Classifications
 		if shouldSend {
 			// this updates the CaptureTill time to be further in the future
-			fc.buf.MarkShouldSend(meta.CapturedAt)
+			fc.buf.MarkShouldSend(meta.CapturedAt, annotations)
 
 			fc.buf.StoreImages([]camera.NamedImage{img}, meta, meta.CapturedAt)
 
@@ -557,8 +548,7 @@ func classificationToAnnotations(cs []classification.Classification) data.Annota
 
 func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 	annotations := data.Annotations{
-		BoundingBoxes: make([]data.BoundingBox, 0, len(ds)),
-		Classifications: []data.Classification{},
+		BoundingBoxes:   make([]data.BoundingBox, 0, len(ds)),
 	}
 	for _, d := range ds {
 		score := d.Score()
@@ -573,10 +563,6 @@ func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 				YMaxNormalized: bbox[3],
 			})
 		}
-		annotations.Classifications = append(annotations.Classifications, data.Classification{
-			Label: d.Label(),
-			Confidence: &score,
-		})
 	}
 	return annotations
 }

@@ -292,7 +292,6 @@ func TestValidate(t *testing.T) {
 	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot all be zero")
 	conf.WindowSeconds = 10 // set it back to previous value
 
-
 	// should error if both vision and vision_service are set
 	conf.VisionServices = []VisionServiceConfig{
 		{
@@ -721,7 +720,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 
 	// Manually trigger at time 5, which should capture images 3, 4, 5, 6, 7 (within 2 second window [3, 7])
 	triggerTime1 := baseTime.Add(5 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime1)
+	fc.buf.MarkShouldSend(triggerTime1, data.Annotations{})
 
 	// Should first capture images 3, 4, 5 (images in the before-trigger buffer)
 	expectedFirstTrigger := []time.Time{
@@ -753,7 +752,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 
 	// Manually trigger at time 10, which should capture images 8, 9, 10
 	triggerTime2 := baseTime.Add(10 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime2)
+	fc.buf.MarkShouldSend(triggerTime2, data.Annotations{})
 
 	// Should capture images 8, 9, 10
 	expectedTrigger := []time.Time{
@@ -800,8 +799,8 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
 		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg", data.Annotations{})
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
-				CapturedAt: imageTime,
-			}, nil
+			CapturedAt: imageTime,
+		}, nil
 	}
 
 	// Create vision service that initially doesn't trigger (below threshold)
@@ -832,7 +831,6 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 
 	// Initialize image buffer: (3+2) * 1.0 = 5 images max in ring buffer
 	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
-
 
 	// Ticks 1-4: Background captures
 	for i := 1; i <= 4; i++ {
@@ -954,8 +952,8 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
 		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg", data.Annotations{})
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
-				CapturedAt: imageTime,
-			}, nil
+			CapturedAt: imageTime,
+		}, nil
 	}
 
 	// Create vision service that triggers when we want it to
@@ -992,7 +990,6 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 
 	// Initialize image buffer: (10+2) * 1.0 = 12 images max in ring buffer
 	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
-
 
 	// Build up ring buffer with 15 images
 	for i := 1; i <= 15; i++ {
@@ -1104,8 +1101,8 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 		currentTime := baseTime.Add(time.Duration(captureCount) * time.Second)
 		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), "color", "image/jpeg", data.Annotations{})
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
-				CapturedAt: currentTime,
-			}, nil
+			CapturedAt: currentTime,
+		}, nil
 	}
 
 	// Create vision service that always triggers (for easy window setup)
@@ -1136,7 +1133,6 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 
 	// Initialize image buffer
 	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
-
 
 	// Step 1: Build up some ring buffer by capturing background images (simulate background worker)
 	for i := 0; i < 5; i++ {
@@ -1228,18 +1224,18 @@ func TestMultipleTriggerWindows(t *testing.T) {
 	}
 	// Manually trigger at time 5
 	triggerTime1 := baseTime.Add(5 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime1)
+	fc.buf.MarkShouldSend(triggerTime1, data.Annotations{})
 	// Now add more images, with additional triggers at 7 and 9
 	fc.captureImageInBackground(ctx) // 6
 	fc.captureImageInBackground(ctx) // 7
 	// Manually trigger at time 7
 	triggerTime2 := baseTime.Add(7 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime2)
+	fc.buf.MarkShouldSend(triggerTime2, data.Annotations{})
 	fc.captureImageInBackground(ctx) // 8
 	fc.captureImageInBackground(ctx) // 9
 	// Manually trigger at time 9
 	triggerTime3 := baseTime.Add(9 * time.Second)
-	fc.buf.MarkShouldSend(triggerTime3)
+	fc.buf.MarkShouldSend(triggerTime3, data.Annotations{})
 	for i := 10; i <= 20; i++ {
 		fc.captureImageInBackground(ctx)
 	}
@@ -1279,8 +1275,8 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
 		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg", data.Annotations{})
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
-				CapturedAt: imageTime,
-			}, nil
+			CapturedAt: imageTime,
+		}, nil
 	}
 
 	// Create vision service that always triggers
