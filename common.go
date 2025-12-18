@@ -12,10 +12,6 @@ import (
 var Family = resource.ModelNamespace("tahiya").WithFamily("camera")
 
 func IsFromDataMgmt(ctx context.Context, extra map[string]interface{}) bool {
-	if extra[data.FromDMString] == true == true {
-		return true
-	}
-
 	if extra != nil && extra[data.FromDMString] == true {
 		return true
 	}
@@ -36,11 +32,9 @@ func ImagesToImage(ctx context.Context, ni []camera.NamedImage) ([]byte, camera.
 	// The other option is to add annotations to the NamedImage struct.
 	// This is just a placeholder since I don't know where exactly in the
 	// pipeline the annotations will be added.
-	return bytes, camera.ImageMetadata{
-		MimeType: ni[0].MimeType(),
-		Annotations: data.Annotations{
-			Classifications: []data.Classification{
-				{Label: "test_filtered_cam", Confidence: new(float64)},
-			},
-		}}, nil
+	annotations := ni[0].Annotations
+	annotations.Classifications = append(annotations.Classifications,
+		data.Classification{Label: "test_filtered_camera"})
+
+	return bytes, camera.ImageMetadata{MimeType: ni[0].MimeType(), Annotations: annotations}, nil
 }

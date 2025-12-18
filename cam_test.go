@@ -120,22 +120,22 @@ func TestShouldSend(t *testing.T) {
 		buf:                     imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 	}
 
-	res, err := fc.shouldSend(context.Background(), namedD, time.Now())
+	res, _, err := fc.shouldSend(context.Background(), namedD, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
-	res, err = fc.shouldSend(context.Background(), namedC, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedC, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
-	res, err = fc.shouldSend(context.Background(), namedB, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedB, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedA, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedA, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
@@ -144,14 +144,14 @@ func TestShouldSend(t *testing.T) {
 
 	// test wildcard
 
-	res, err = fc.shouldSend(context.Background(), namedE, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedE, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedF, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedF, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
@@ -161,14 +161,14 @@ func TestShouldSend(t *testing.T) {
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedE, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedE, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedF, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedF, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
@@ -181,7 +181,7 @@ func TestShouldSend(t *testing.T) {
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedA, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedA, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
@@ -191,7 +191,7 @@ func TestShouldSend(t *testing.T) {
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedB, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedB, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
@@ -202,14 +202,14 @@ func TestShouldSend(t *testing.T) {
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedB, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedB, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedF, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedF, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 
@@ -222,7 +222,7 @@ func TestShouldSend(t *testing.T) {
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedA, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedA, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, true)
 	test.That(t, fc.acceptedStats.total, test.ShouldEqual, 1)
@@ -239,7 +239,7 @@ func TestShouldSend(t *testing.T) {
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedB, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedB, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
@@ -253,7 +253,7 @@ func TestShouldSend(t *testing.T) {
 	// Reset buffer state to clear CaptureTill
 	fc.buf.SetCaptureTill(time.Time{})
 
-	res, err = fc.shouldSend(context.Background(), namedD, time.Now())
+	res, _, err = fc.shouldSend(context.Background(), namedD, time.Now())
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldEqual, false)
 	test.That(t, fc.rejectedStats.total, test.ShouldEqual, 1)
@@ -416,12 +416,11 @@ func TestImage(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
-	res, meta, err := fc.Image(ctx, utils.MimeTypeJPEG, nil)
-	// Trigger occurs but no historical buffered images available (edge case: triggering faster than buffer can fill)
-	test.That(t, err, test.ShouldEqual, data.ErrNoCaptureToStore)
-	test.That(t, res, test.ShouldBeNil)
+	res, meta, err := fc.Image(ctx, utils.MimeTypeJPEG, map[string]interface{}{data.FromDMString: true})
+	// Trigger occurs and the annotated trigger image is stored in the buffer
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
 
 	test.That(t, meta, test.ShouldNotBeNil)
 }
@@ -429,9 +428,9 @@ func TestImage(t *testing.T) {
 func TestImages(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 
-	imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg")
-	imgB, _ := camera.NamedImageFromImage(b, "", "image/jpeg")
-	imgC, _ := camera.NamedImageFromImage(c, "", "image/jpeg")
+	imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg", data.Annotations{})
+	imgB, _ := camera.NamedImageFromImage(b, "", "image/jpeg", data.Annotations{})
+	imgC, _ := camera.NamedImageFromImage(c, "", "image/jpeg", data.Annotations{})
 	namedImages := []camera.NamedImage{imgA, imgB, imgC}
 
 	timestamp := time.Now()
@@ -458,14 +457,13 @@ func TestImages(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
-	res, meta, err := fc.Images(ctx, nil, nil)
-	// Trigger occurs but no historical buffered images available (edge case: triggering faster than buffer can fill)
-	test.That(t, err, test.ShouldEqual, data.ErrNoCaptureToStore)
-	test.That(t, res, test.ShouldBeNil)
+	res, meta, err := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
+	// Trigger occurs and the annotated trigger image is stored in the buffer
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, len(res), test.ShouldEqual, 1) // The annotated trigger image
 	test.That(t, meta, test.ShouldNotBeNil)
-	test.That(t, meta.CapturedAt, test.ShouldResemble, timestamp)
 }
 
 func TestImageWithBufferedImages(t *testing.T) {
@@ -485,7 +483,7 @@ func TestImageWithBufferedImages(t *testing.T) {
 		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-				img, _ := camera.NamedImageFromImage(a, "trigger_img", "image/jpeg")
+				img, _ := camera.NamedImageFromImage(a, "trigger_img", "image/jpeg", data.Annotations{})
 				return []camera.NamedImage{img}, resource.ResponseMetadata{CapturedAt: time.Now()}, nil
 			},
 		},
@@ -502,7 +500,6 @@ func TestImageWithBufferedImages(t *testing.T) {
 	fc.buf.AddToRingBuffer([]camera.NamedImage{img2}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-1 * time.Second)})
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
 	res, meta, err := fc.Image(ctx, utils.MimeTypeJPEG, nil)
 	test.That(t, err, test.ShouldBeNil)
@@ -560,21 +557,23 @@ func TestImagesWithBufferedImages(t *testing.T) {
 	fc.buf.AddToRingBuffer([]camera.NamedImage{img3}, resource.ResponseMetadata{CapturedAt: expectedTimes[2]})
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
-	res, meta, err := fc.Images(ctx, nil, nil)
+	res, meta, err := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, res, test.ShouldNotBeNil)
 
-	// Should get all buffered images (with timestamp naming)
-	test.That(t, len(res), test.ShouldEqual, 3)
+	// Should get all buffered images plus the annotated trigger image (with timestamp naming)
+	test.That(t, len(res), test.ShouldEqual, 4) // 3 buffered + 1 trigger with annotations
 
-	// Verify images have timestamp prefixes and correct timestamps
-	for i, img := range res {
-		test.That(t, strings.Contains(img.SourceName, "_buffered_img_"), test.ShouldBeTrue)
+	// First 3 are buffered images
+	for i := 0; i < 3; i++ {
+		test.That(t, strings.Contains(res[i].SourceName, "_buffered_img_"), test.ShouldBeTrue)
 		// Verify timestamps match expected capture times
-		assertTimestampsMatch(t, img.SourceName, expectedTimes[i])
+		assertTimestampsMatch(t, res[i].SourceName, expectedTimes[i])
 	}
+
+	// Last one is the annotated trigger image
+	test.That(t, strings.Contains(res[3].SourceName, "_trigger_img"), test.ShouldBeTrue)
 
 	test.That(t, meta, test.ShouldNotBeNil)
 }
@@ -833,7 +832,6 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	// Initialize image buffer: (3+2) * 1.0 = 5 images max in ring buffer
 	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
 
-	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
 	// Ticks 1-4: Background captures
 	for i := 1; i <= 4; i++ {
@@ -870,14 +868,14 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	for i, img := range images3 {
 		t.Logf("  [%d]: %s", i, img.SourceName)
 	}
-	// Trigger occurs on img_13 but trigger image is not returned (to maintain chronological order)
-	// Instead we get buffered images from the window [10s, 15s]
+	// Trigger occurs on img_13 and the annotated trigger image is now stored in buffer
+	// We get buffered images from the window [10s, 15s] plus the trigger image
 	// Available images in ring buffer: img_7, img_8, img_9, img_11, img_12
-	// Images within window [10s, 15s]: img_11, img_12 (img_10 missing due to gap)
+	// Images within window [10s, 15s]: img_11, img_12 (img_10 missing due to gap) + img_13 (trigger)
 	test.That(t, err3, test.ShouldBeNil)            // Should succeed - trigger occurred and buffered images available
-	test.That(t, len(images3), test.ShouldEqual, 2) // Images 11, 12
+	test.That(t, len(images3), test.ShouldEqual, 3) // Images 11, 12, 13 (13 is trigger with annotations)
 	// Verify exact image names in chronological order (with timestamp prefixes)
-	expectedNames3 := []string{"img_11", "img_12"}
+	expectedNames3 := []string{"img_11", "img_12", "img_13"}
 	for i, img := range images3 {
 		// Image names should have format "[timestamp]_img_[number]"
 		actualNumber := extractImageNumber(img.SourceName)
@@ -886,7 +884,7 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 		// Also verify it has timestamp prefix format
 		test.That(t, strings.Contains(img.SourceName, "_img_"), test.ShouldBeTrue)
 		// Verify timestamps match expected capture times
-		expectedTime := baseTime.Add(time.Duration(11+i) * time.Second) // img_11 = baseTime + 11s, img_12 = baseTime + 12s
+		expectedTime := baseTime.Add(time.Duration(11+i) * time.Second) // img_11 = baseTime + 11s, etc.
 		assertTimestampsMatch(t, img.SourceName, expectedTime)
 	}
 	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0) // Should be empty after PopAllToSend
@@ -953,7 +951,7 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 		[]camera.NamedImage, resource.ResponseMetadata, error) {
 		timeCount++
 		imageTime := baseTime.Add(time.Duration(timeCount) * time.Second)
-		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg")
+		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", timeCount), "image/jpeg", data.Annotations{})
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
 			CapturedAt: imageTime,
 		}, nil
@@ -994,7 +992,6 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	// Initialize image buffer: (10+2) * 1.0 = 12 images max in ring buffer
 	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
 
-	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
 	// Build up ring buffer with 15 images
 	for i := 1; i <= 15; i++ {
@@ -1104,7 +1101,7 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 		[]camera.NamedImage, resource.ResponseMetadata, error) {
 		captureCount++
 		currentTime := baseTime.Add(time.Duration(captureCount) * time.Second)
-		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), "color", "image/jpeg")
+		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), "color", "image/jpeg", data.Annotations{})
 		return []camera.NamedImage{img}, resource.ResponseMetadata{
 			CapturedAt: currentTime,
 		}, nil
@@ -1139,7 +1136,6 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 	// Initialize image buffer
 	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
 
-	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
 	// Step 1: Build up some ring buffer by capturing background images (simulate background worker)
 	for i := 0; i < 5; i++ {
@@ -1152,10 +1148,11 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 	// This should trigger because vision service returns confidence > 0.8
 	images1, _, err1 := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err1, test.ShouldBeNil)
-	test.That(t, len(images1), test.ShouldEqual, 2) // secondsBefore is 2, should have two sent to Capture
+	test.That(t, len(images1), test.ShouldEqual, 3) // secondsBefore is 2 (images 4,5) + trigger image (6)
 	// lets make sure those timestamps are correct
 	assertTimestampsMatch(t, images1[0].SourceName, baseTime.Add(time.Duration(4)*time.Second))
 	assertTimestampsMatch(t, images1[1].SourceName, baseTime.Add(time.Duration(5)*time.Second))
+	assertTimestampsMatch(t, images1[2].SourceName, baseTime.Add(time.Duration(6)*time.Second)) // trigger image
 
 	// Step 3: Clear ToSend buffer to simulate the race condition scenario
 	fc.buf.ClearToSend()
@@ -1315,7 +1312,6 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
 
 	// Add data management context
-	ctx = context.WithValue(ctx, data.FromDMContextKey{}, true)
 
 	// Build up ring buffer with several images
 	for i := 0; i < 20; i++ {
@@ -1327,10 +1323,10 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 	// Track all images returned across multiple GetImages() calls
 	allReturnedImages := make(map[string]int) // image name -> count
 
-	// First GetImages() call - should trigger and return historical images (15 from windows before)
+	// First GetImages() call - should trigger and return historical images (15 from windows before) + trigger image
 	images1, _, err1 := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err1, test.ShouldBeNil)
-	test.That(t, len(images1), test.ShouldEqual, 15)
+	test.That(t, len(images1), test.ShouldEqual, 16) // 15 historical + 1 trigger with annotations
 
 	// Add more images to continue capture window
 	for i := 0; i < 3; i++ {
@@ -1339,10 +1335,10 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
 	}
 
-	// Second GetImages() call - should return continuing images from the same trigger window, there would have been an overlap
+	// Second GetImages() call - should return continuing images from the same trigger window + trigger image
 	images2, _, err2 := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err2, test.ShouldBeNil)
-	test.That(t, len(images2), test.ShouldEqual, 3)
+	test.That(t, len(images2), test.ShouldEqual, 4) // 3 continuing + 1 trigger with annotations
 
 	// Wait for capture window to end
 	for i := 0; i < 20; i++ {
@@ -1351,10 +1347,10 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 		fc.buf.StoreImages(bgImages, bgMeta, bgMeta.CapturedAt)
 	}
 
-	// Third GetImages() call - should trigger a new capture window with a fresh set of before images, plus the 2 left over from the previous "after" window
+	// Third GetImages() call - should trigger a new capture window with a fresh set of before images, plus the 2 left over from the previous "after" window, plus trigger image
 	images3, _, err3 := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
 	test.That(t, err3, test.ShouldBeNil)
-	test.That(t, len(images3), test.ShouldEqual, 17)
+	test.That(t, len(images3), test.ShouldEqual, 18) // 15 before + 2 after + 1 trigger with annotations
 
 	// The critical test, verify no image appears more than once across all GetImages() calls
 	duplicateFound := false

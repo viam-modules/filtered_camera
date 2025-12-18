@@ -11,18 +11,6 @@ import (
 )
 
 func TestIsFromDataMgmt(t *testing.T) {
-	t.Run("context with FromDMContextKey true", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), data.FromDMContextKey{}, true)
-		result := IsFromDataMgmt(ctx, nil)
-		test.That(t, result, test.ShouldBeTrue)
-	})
-
-	t.Run("context with FromDMContextKey false", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), data.FromDMContextKey{}, false)
-		result := IsFromDataMgmt(ctx, nil)
-		test.That(t, result, test.ShouldBeFalse)
-	})
-
 	t.Run("extra with FromDMString true", func(t *testing.T) {
 		ctx := context.Background()
 		extra := map[string]interface{}{
@@ -37,6 +25,19 @@ func TestIsFromDataMgmt(t *testing.T) {
 		extra := map[string]interface{}{
 			data.FromDMString: false,
 		}
+		result := IsFromDataMgmt(ctx, extra)
+		test.That(t, result, test.ShouldBeFalse)
+	})
+
+	t.Run("nil extra returns false", func(t *testing.T) {
+		ctx := context.Background()
+		result := IsFromDataMgmt(ctx, nil)
+		test.That(t, result, test.ShouldBeFalse)
+	})
+
+	t.Run("empty extra returns false", func(t *testing.T) {
+		ctx := context.Background()
+		extra := map[string]interface{}{}
 		result := IsFromDataMgmt(ctx, extra)
 		test.That(t, result, test.ShouldBeFalse)
 	})

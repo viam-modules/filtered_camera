@@ -186,7 +186,7 @@ func (cc *conditionalCamera) shouldSend(ctx context.Context) (bool, error) {
 	return ans["result"].(bool), nil
 }
 
-func (cc *conditionalCamera) NextPointCloud(ctx context.Context, _ map[string]interface{}) (pointcloud.PointCloud, error) {
+func (cc *conditionalCamera) NextPointCloud(ctx context.Context, extra map[string]interface{}) (pointcloud.PointCloud, error) {
 	return nil, errUnimplemented
 }
 
