@@ -226,6 +226,7 @@ type imageStats struct {
 	total     int
 	breakdown map[string]int
 	startTime time.Time
+	last      time.Time
 }
 
 func (is *imageStats) update(visionService string) {
@@ -238,6 +239,7 @@ func (is *imageStats) update(visionService string) {
 		return
 	}
 	is.breakdown[visionService]++
+	is.last = time.Now()
 }
 
 func (fc *filteredCamera) formatStats() map[string]interface{} {
@@ -251,6 +253,8 @@ func (fc *filteredCamera) formatStats() map[string]interface{} {
 	} else {
 		acceptedStats["total"] = fc.acceptedStats.total
 		acceptedStats["vision"] = fc.acceptedStats.breakdown
+		acceptedStats["last"] = fc.acceptedStats.last.Format(time.RFC1123)
+		acceptedStats["seconds_since"] = time.Since(fc.acceptedStats.last).Seconds()
 	}
 	if rejectedStats, ok := stats["rejected"].(map[string]interface{}); !ok {
 		fc.logger.Errorf("failed to get stats")
@@ -258,6 +262,8 @@ func (fc *filteredCamera) formatStats() map[string]interface{} {
 	} else {
 		rejectedStats["total"] = fc.rejectedStats.total
 		rejectedStats["vision"] = fc.rejectedStats.breakdown
+		rejectedStats["last"] = fc.rejectedStats.last.Format(time.RFC1123)
+		rejectedStats["seconds_since"] = time.Since(fc.rejectedStats.last).Seconds()
 	}
 
 	stats["start_time"] = fc.acceptedStats.startTime.Format(time.RFC1123)
