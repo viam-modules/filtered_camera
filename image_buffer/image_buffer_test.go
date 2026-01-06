@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 
@@ -28,7 +29,7 @@ func TestWindow(t *testing.T) {
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
 	}
 
-	buf.MarkShouldSend(time.Now())
+	buf.MarkShouldSend(time.Now(), data.Annotations{})
 
 	// With the new implementation, we expect images within the window to be sent
 	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 2)
@@ -44,7 +45,7 @@ func TestWindow(t *testing.T) {
 	}
 	buf.ClearToSend()
 
-	buf.MarkShouldSend(time.Now())
+	buf.MarkShouldSend(time.Now(), data.Annotations{})
 
 	// Test that the ring buffer now only contains images that were NOT sent (c was outside window)
 	test.That(t, buf.GetRingBufferLength(), test.ShouldEqual, 1)
@@ -67,7 +68,7 @@ func TestWindowBoundaries(t *testing.T) {
 		{Meta: resource.ResponseMetadata{CapturedAt: c}},
 	}
 
-	buf.MarkShouldSend(time.Now())
+	buf.MarkShouldSend(time.Now(), data.Annotations{})
 
 	// With the new implementation, we expect images within the window to be sent
 	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 2)
@@ -83,7 +84,7 @@ func TestWindowBoundaries(t *testing.T) {
 	}
 	buf.ClearToSend()
 
-	buf.MarkShouldSend(time.Now())
+	buf.MarkShouldSend(time.Now(), data.Annotations{})
 
 	// Test that the ring buffer now only contains images that were NOT sent (c was outside window)
 	test.That(t, buf.GetRingBufferLength(), test.ShouldEqual, 1)
