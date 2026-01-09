@@ -29,6 +29,15 @@ Add `camera` / `filtered-camera` to your machine.
 > [!NOTE]  
 > For a tutorial on filtering data with this module, see [Selectively capture data using filtered-camera](https:docs.viam.com/tutorials/projects/filtered-camera/).
 
+## Releasing -rc and production versions
+
+On github, go to Releases -> Draft New Release
+
+- If you are releasing a test version, select your branch (not main) and type in a new tag of the form X.Z.Y-rcW where X, Y, Z, and W are numbers
+- If you are releasing a production version, select main as the branch, and type in a classic semvar X.Z.Y as the tag
+
+You can auto-generate the release notes
+
 ## Configure your filtered camera
 
 On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box.
