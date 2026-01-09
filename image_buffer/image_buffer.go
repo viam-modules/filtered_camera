@@ -182,6 +182,7 @@ func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
 			"imagesConsumed", 1,
 			"remainingToSendSize", remainingLen)
 	}
+	ib.logger.Debugf("annotations added to images in PopFirstToSend", x.Imgs[0].Annotations)
 	return x, true
 }
 
@@ -199,6 +200,12 @@ func TimestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMe
 
 		// Format: [timestamp]_[original_name]
 		result[i].SourceName = timestampStr + "_" + img.SourceName
+		// Pass in annotations per image.
+		// This is just a placeholder since I don't know where exactly in the
+		// pipeline the annotations will be added.
+		result[i].Annotations.Classifications = append(img.Annotations.Classifications,
+			data.Classification{Label: "test_filtered_cam", Confidence: nil},
+		)
 	}
 	return result
 }
@@ -241,6 +248,7 @@ func (ib *ImageBuffer) PopAllToSend() ([]camera.NamedImage, resource.ResponseMet
 	// Clear the ToSend buffer
 	ib.toSend = []CachedData{}
 
+	ib.logger.Debugf("annotations added to images in PopAllToSend", allImages[0].Annotations)
 	return allImages, earliestMeta, true
 }
 
