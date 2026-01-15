@@ -23,7 +23,7 @@ The filtered camera uses a background worker that continuously captures images f
 
 When images are captured and buffered for data management, each image receives a timestamp-based name in the format `[timestamp]_[original_name]` to preserve capture timing information and ensure chronological ordering during data sync.
 
-**Annotations**: When a trigger condition is met, the image that triggered the capture includes the detection or classification annotations (bounding boxes or classification labels) that caused the trigger. Buffered images from before and after the trigger do not include annotations—only the trigger image itself is annotated. This allows you to easily identify which image in a capture sequence was the one that met your filter criteria.
+**Annotations**: When a trigger condition is met, the image that triggered the capture includes the detection or classification annotations (bounding boxes or classification labels) that caused the trigger. Buffered images from before and after the trigger do not include annotations, only the trigger image itself is annotated. This allows you to easily identify which image in a capture sequence was the one that met your filter criteria.
 
 To add the filtered camera to your machine, navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
 Add `camera` / `filtered-camera` to your machine.
