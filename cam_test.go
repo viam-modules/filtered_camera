@@ -570,10 +570,16 @@ func TestImagesWithBufferedImages(t *testing.T) {
 		test.That(t, strings.Contains(res[i].SourceName, "_buffered_img_"), test.ShouldBeTrue)
 		// Verify timestamps match expected capture times
 		assertTimestampsMatch(t, res[i].SourceName, expectedTimes[i])
+		// Buffered images should NOT have annotations
+		test.That(t, len(res[i].Annotations.BoundingBoxes), test.ShouldEqual, 0)
+		test.That(t, len(res[i].Annotations.Classifications), test.ShouldEqual, 0)
 	}
 
 	// Last one is the annotated trigger image
 	test.That(t, strings.Contains(res[3].SourceName, "_trigger_img"), test.ShouldBeTrue)
+	// Trigger image SHOULD have classification annotations
+	test.That(t, len(res[3].Annotations.Classifications), test.ShouldBeGreaterThan, 0)
+	test.That(t, res[3].Annotations.Classifications[0].Label, test.ShouldEqual, "a")
 
 	test.That(t, meta, test.ShouldNotBeNil)
 }
