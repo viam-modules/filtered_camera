@@ -425,7 +425,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 		img.Annotations.Classifications = annotations.Classifications
 		if shouldSend {
 			// this updates the CaptureTill time to be further in the future
-			fc.buf.MarkShouldSend(meta.CapturedAt, annotations)
+			fc.buf.MarkShouldSend(meta.CapturedAt)
 
 			fc.buf.StoreImages([]camera.NamedImage{img}, meta, meta.CapturedAt)
 
