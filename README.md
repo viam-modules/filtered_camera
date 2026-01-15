@@ -23,11 +23,13 @@ The filtered camera uses a background worker that continuously captures images f
 
 When images are captured and buffered for data management, each image receives a timestamp-based name in the format `[timestamp]_[original_name]` to preserve capture timing information and ensure chronological ordering during data sync.
 
+**Annotations**: When a trigger condition is met, the image that triggered the capture includes the detection or classification annotations (bounding boxes or classification labels) that caused the trigger. Buffered images from before and after the trigger do not include annotations—only the trigger image itself is annotated. This allows you to easily identify which image in a capture sequence was the one that met your filter criteria.
+
 To add the filtered camera to your machine, navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/).
 Add `camera` / `filtered-camera` to your machine.
 
-> [!NOTE]  
-> For a tutorial on filtering data with this module, see [Selectively capture data using filtered-camera](https:docs.viam.com/tutorials/projects/filtered-camera/).
+> [!NOTE]
+> For a tutorial on filtering data with this module, see [Selectively capture data using filtered-camera](https://docs.viam.com/tutorials/projects/filtered-camera/).
 
 ## Releasing -rc and production versions
 
@@ -98,6 +100,27 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
 
 > [!WARNING]
 > If a vision service has no specified classifications and/or objects, it won't trigger any data capture.
+
+> [!TIP]
+> You can use `"*"` as a wildcard label to match any classification or detection above the specified confidence threshold. For example, `"classifications": {"*": 0.8}` will trigger on any classification with confidence above 0.8.
+
+### Statistics
+
+The filtered camera tracks statistics about accepted and rejected images. You can retrieve these statistics by calling `DoCommand` on the camera, which returns:
+
+```json
+{
+    "accepted": {
+        "total": 42,
+        "vision": {"person": 30, "car": 12}
+    },
+    "rejected": {
+        "total": 100,
+        "vision": {"no vision services triggered": 100}
+    },
+    "start_time": "Mon, 15 Jan 2024 10:30:00 UTC"
+}
+```
 
 ### Example configurations
 
