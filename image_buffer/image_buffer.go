@@ -25,6 +25,8 @@ type ImageBuffer struct {
 	toSend              []CachedData
 	captureFrom         time.Time
 	captureTill         time.Time
+	cooldownTill        time.Time
+	cooldownSecs        int
 	windowSecondsBefore int
 	windowSecondsAfter  int
 	imageFrequency      float64
@@ -35,7 +37,7 @@ type ImageBuffer struct {
 	toSendMaxWarningThreshold int
 }
 
-func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefore int, windowSecondsAfter int, logger logging.Logger, debug bool) *ImageBuffer {
+func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefore int, windowSecondsAfter int, logger logging.Logger, debug bool, cooldownSecs int) *ImageBuffer {
 	// Calculate the maximum number of images to keep in the ring buffer
 	// Keep images for 2 * windowSeconds (before and after trigger)
 	var maxImages int
@@ -51,6 +53,7 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		toSend:              []CachedData{},
 		windowSecondsBefore: windowSecondsBefore,
 		windowSecondsAfter:  windowSecondsAfter,
+		cooldownSecs:        cooldownSecs,
 		imageFrequency:      imageFrequency,
 		maxImages:           maxImages,
 		logger:              logger,
@@ -75,6 +78,7 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 		ib.captureFrom = newCaptureFrom
 	}
 	ib.captureTill = newCaptureTill
+	ib.cooldownTill = newCaptureTill.Add(time.Duration(ib.cooldownSecs) * time.Second)
 
 	// Send images from the ring buffer and continue collecting for windowDuration
 	var imagesToSend []CachedData
@@ -113,6 +117,7 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 			"triggerTime", triggerTime.Format(timestampFormat),
 			"captureFrom", ib.captureFrom.Format(timestampFormat),
 			"captureTill", ib.captureTill.Format(timestampFormat),
+			"cooldownTill", ib.cooldownTill.Format(timestampFormat),
 			"imagesAdded", len(imagesToSend),
 			"toSendSize", toSendLen,
 			"ringBufferSize", len(ib.ringBuffer))
@@ -143,6 +148,14 @@ func (ib *ImageBuffer) SetCaptureTill(t time.Time) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 	ib.captureTill = t
+}
+
+// SetCooldownTill sets the cooldownTill time
+// This method is only used for testing purposes
+func (ib *ImageBuffer) SetCooldownTill(t time.Time) {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+	ib.cooldownTill = t
 }
 
 // GetToSendLength returns the length of the toSend slice
@@ -269,6 +282,28 @@ func (ib *ImageBuffer) GetToSendSlice() []CachedData {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 	return append([]CachedData{}, ib.toSend...)
+}
+
+// IsInCooldown returns true if the given time is after the capture window has ended
+// but before the cooldown period has expired. During cooldown, new triggers should be suppressed.
+func (ib *ImageBuffer) IsInCooldown(now time.Time) bool {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+
+	afterCaptureWindow := now.After(ib.captureTill)
+	beforeCooldownEnd := now.Before(ib.cooldownTill) || now.Equal(ib.cooldownTill)
+	inCooldown := afterCaptureWindow && beforeCooldownEnd
+
+	if ib.debug {
+		ib.logger.Infow("IsInCooldown check",
+			"method", "IsInCooldown",
+			"now", now.Format(timestampFormat),
+			"captureTill", ib.captureTill.Format(timestampFormat),
+			"cooldownTill", ib.cooldownTill.Format(timestampFormat),
+			"inCooldown", inCooldown)
+	}
+
+	return inCooldown
 }
 
 // IsWithinCaptureWindow returns true if the given time is within the current capture window

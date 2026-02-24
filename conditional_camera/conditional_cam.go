@@ -33,6 +33,7 @@ type Config struct {
 	ImageFrequency      float64 `json:"image_frequency"`
 	WindowSecondsBefore int     `json:"window_seconds_before"`
 	WindowSecondsAfter  int     `json:"window_seconds_after"`
+	CooldownSecs        int     `json:"cooldown_s"`
 	Debug               bool    `json:"debug"`
 }
 
@@ -55,6 +56,10 @@ func (cfg *Config) Validate(path string) ([]string, []string, error) {
 	} else if cfg.WindowSeconds > 0 && (cfg.WindowSecondsBefore > 0 || cfg.WindowSecondsAfter > 0) {
 		return nil, nil, utils.NewConfigValidationError(path,
 			errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
+	}
+
+	if cfg.CooldownSecs < 0 {
+		return nil, nil, utils.NewConfigValidationError(path, errors.New("cooldown_s cannot be negative"))
 	}
 
 	return []string{cfg.Camera, cfg.FilterSvc}, nil, nil
@@ -85,7 +90,7 @@ func init() {
 			if imageFreq == 0 {
 				imageFreq = 1.0
 			}
-			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter, logger, newConf.Debug)
+			cc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter, logger, newConf.Debug, newConf.CooldownSecs)
 
 			return cc, nil
 		},
@@ -156,6 +161,15 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 		}
 		// If no buffered images, return current image (we're in capture mode)
 		return images, meta, nil
+	}
+
+	// If we're in the cooldown period after a capture window, suppress new triggers
+	if cc.buf.IsInCooldown(meta.CapturedAt) {
+		// Still return any remaining buffered images from the previous trigger
+		if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(singleImageMode); ok {
+			return bufferedImages, bufferedMeta, nil
+		}
+		return nil, meta, data.ErrNoCaptureToStore
 	}
 
 	// We're outside capture window, add to ring buffer and run filter checks

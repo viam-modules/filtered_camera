@@ -33,6 +33,7 @@ type Config struct {
 	ImageFrequency      float64               `json:"image_frequency"`
 	WindowSecondsBefore int                   `json:"window_seconds_before"`
 	WindowSecondsAfter  int                   `json:"window_seconds_after"`
+	CooldownSecs        int                   `json:"cooldown_s"`
 	Debug               bool                  `json:"debug"`
 
 	Classifications map[string]float64
@@ -81,6 +82,10 @@ func (cfg *Config) Validate(path string) ([]string, []string, error) {
 	} else if cfg.WindowSeconds > 0 && (cfg.WindowSecondsBefore > 0 || cfg.WindowSecondsAfter > 0) {
 		return nil, nil, utils.NewConfigValidationError(path,
 			errors.New("if window_seconds is set, window_seconds_before and window_seconds_after must not be"))
+	}
+
+	if cfg.CooldownSecs < 0 {
+		return nil, nil, utils.NewConfigValidationError(path, errors.New("cooldown_s cannot be negative"))
 	}
 
 	deps := []string{cfg.Camera}
@@ -179,7 +184,7 @@ func init() {
 			if imageFreq == 0 {
 				imageFreq = defaultImageFreq
 			}
-			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter, logger, newConf.Debug)
+			fc.buf = imagebuffer.NewImageBuffer(newConf.WindowSeconds, imageFreq, newConf.WindowSecondsBefore, newConf.WindowSecondsAfter, logger, newConf.Debug, newConf.CooldownSecs)
 
 			// Initialize background image capture worker
 			fc.backgroundWorkers = utils.NewStoppableWorkerWithTicker(
@@ -406,6 +411,22 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 		return timestampedImages, meta, nil
 	}
 
+	// If we're in the cooldown period after a capture window, suppress new triggers
+	if fc.buf.IsInCooldown(meta.CapturedAt) {
+		if fc.conf.Debug {
+			fc.logger.Infow("Skipping trigger checks - in cooldown period",
+				"method", "images",
+				"singleImageMode", singleImageMode,
+				"capturedAt", meta.CapturedAt,
+				"inCooldown", true)
+		}
+		// Still return any remaining buffered images from the previous trigger
+		if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+			return bufferedImages, bufferedMeta, nil
+		}
+		return nil, meta, data.ErrNoCaptureToStore
+	}
+
 	if fc.conf.Debug {
 		fc.logger.Infow("Running filter checks",
 			"method", "images",
@@ -548,7 +569,7 @@ func classificationToAnnotations(cs []classification.Classification) data.Annota
 
 func detectionsToAnnotations(ds []objectdetection.Detection) data.Annotations {
 	annotations := data.Annotations{
-		BoundingBoxes:   make([]data.BoundingBox, 0, len(ds)),
+		BoundingBoxes: make([]data.BoundingBox, 0, len(ds)),
 	}
 	for _, d := range ds {
 		score := d.Score()

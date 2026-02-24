@@ -63,6 +63,7 @@ On the new component panel, copy and paste the following attribute template into
     "window_seconds_before": <time_window_for_capture_before>,
     "window_seconds_after": <time_window_for_capture_after>,
     "image_frequency": <capture_rate_of_images_in_buffer>,
+    "cooldown_s": <optional_cooldown_seconds_after_capture_window>
 }
 ```
 
@@ -92,6 +93,7 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
 | `window_seconds_before` | float64 | **Required** | The size of the time window (in seconds) before the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds preceding the condition being met. |
 | `window_seconds_after` | float64 |  **Required** | The size of the time window (in seconds) after the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds after the condition being met. |
 | `image_frequency` | float64 | Optional | the frequency at which to place images into the buffer (in Hz). Default value is 1.0 Hz |
+| `cooldown_s` | int | Optional | The number of seconds to suppress new triggers after a capture window ends. Useful when trigger events happen frequently but you don't need data every time. Default: 0 (no cooldown). |
 | `debug` | bool | Optional | Enable debug logging for detailed information about image buffering, filtering decisions, and capture windows. Default value is false |
 | `vision` | string | **Required** | \*\***DEPRECATED** use `vision_services` attribute instead \*\*. The vision service used for image classifications or detections. |
 | `classifications` | float64 | Optional | \*\***DEPRECATED** Use `vision_services`\*\* A map of classification labels and the confidence scores required for filtering. Use this if the ML model behind your vision service is a classifier. You can find these labels by testing your vision service. |
@@ -143,6 +145,7 @@ The filtered camera tracks statistics about accepted and rejected images. You ca
     ],
     "window_seconds": 6,
     "image_frequency": 0.5,
+    "cooldown_s": 30
 }
 ```
 
@@ -202,6 +205,7 @@ The following attributes are available for `viam:camera:conditional-camera` base
 | `window_seconds_after` | float64 | Optional | The size of the time window (in seconds) after the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds after the condition being met. |
 | `window_seconds` | float64 | Optional | The size of the time window (in seconds) during which images are buffered. When a condition is met, a confidence score for a detection/classification exceeds the required confidence score, the buffered images are stored, allowing us to see the photos taken in the specified number of seconds preceding and after the condition being met. If this value is set, the 'window_seconds_before' and 'window_seconds_after' variable must both be set to 0.0. |
 | `image_frequency` | float64 | Optional | the frequency at which to place images into the buffer (in Hz). Default value is 1.0 Hz |
+| `cooldown_s` | int | Optional | The number of seconds to suppress new triggers after a capture window ends. Useful when trigger events happen frequently but you don't need data every time. Default: 0 (no cooldown). |
 | `debug` | bool | Optional | Enable debug logging for detailed information about image buffering, filtering decisions, and capture windows. Default value is false |
 
 On the new component panel, copy and paste the following attribute template into your camera’s **Attributes** box.
@@ -212,7 +216,8 @@ On the new component panel, copy and paste the following attribute template into
     "filter_service": "<your_vision_service_name>",
     "window_seconds": <time_window_for_capture>,
     "window_seconds_before": <time_window_for_capture_before>,
-    "window_seconds_after": <time_window_for_capture_after>
+    "window_seconds_after": <time_window_for_capture_after>,
+    "cooldown_s": <optional_cooldown_seconds_after_capture_window>
 }
 ```
 
@@ -227,6 +232,7 @@ On the new component panel, copy and paste the following attribute template into
     "filter_service": "is_too_hot",
     "window_seconds_before": 3,
     "window_seconds_after": 7,
+    "cooldown_s": 30
 }
 ```
 
