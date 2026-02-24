@@ -117,7 +117,7 @@ func TestShouldSend(t *testing.T) {
 		},
 		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
 		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
-		buf:                     imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
+		buf:                     imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
 	}
 
 	res, _, err := fc.shouldSend(context.Background(), namedD, time.Now())
@@ -402,7 +402,7 @@ func TestImage(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg", data.Annotations{})
@@ -446,7 +446,7 @@ func TestImages(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				return namedImages, resource.ResponseMetadata{CapturedAt: timestamp}, nil
@@ -480,7 +480,7 @@ func TestImageWithBufferedImages(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				img, _ := camera.NamedImageFromImage(a, "trigger_img", "image/jpeg", data.Annotations{})
@@ -528,7 +528,7 @@ func TestImagesWithBufferedImages(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				img, _ := camera.NamedImageFromImage(a, "trigger_img", "image/jpeg", data.Annotations{})
@@ -604,7 +604,7 @@ func TestProperties(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
 		cam: &inject.Camera{
 			PropertiesFunc: func(ctx context.Context) (camera.Properties, error) {
 				return properties, nil
@@ -630,7 +630,7 @@ func TestDoCommand(t *testing.T) {
 		otherVisionServices: []vision.Service{
 			getDummyVisionService(),
 		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true),
+		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
 		cam: &inject.Camera{
 			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 				imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg", data.Annotations{})
@@ -717,7 +717,7 @@ func TestRingBufferTriggerWindows(t *testing.T) {
 
 	// Use a base time that's close to current time to make windows work
 	// Initialize the image buffer
-	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0, logging.NewTestLogger(t), true)
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0, logging.NewTestLogger(t), true, 0)
 
 	// First, add images at times 1, 2, 3, 4, 5
 	for i := 1; i <= 5; i++ {
@@ -836,7 +836,7 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	}
 
 	// Initialize image buffer: (3+2) * 1.0 = 5 images max in ring buffer
-	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true, 0)
 
 	// Ticks 1-4: Background captures
 	for i := 1; i <= 4; i++ {
@@ -995,7 +995,7 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	}
 
 	// Initialize image buffer: (10+2) * 1.0 = 12 images max in ring buffer
-	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true, 0)
 
 	// Build up ring buffer with 15 images
 	for i := 1; i <= 15; i++ {
@@ -1138,7 +1138,7 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 	}
 
 	// Initialize image buffer
-	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true, 0)
 
 	// Step 1: Build up some ring buffer by capturing background images (simulate background worker)
 	for i := 0; i < 5; i++ {
@@ -1222,7 +1222,7 @@ func TestMultipleTriggerWindows(t *testing.T) {
 
 	// Use a base time that's close to current time to make windows work
 	// Initialize the image buffer
-	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0, logging.NewTestLogger(t), true)
+	fc.buf = imagebuffer.NewImageBuffer(fc.conf.WindowSeconds, fc.conf.ImageFrequency, 0, 0, logging.NewTestLogger(t), true, 0)
 
 	// First, add images at times 1, 2, 3, 4, 5
 	for i := 1; i <= 5; i++ {
@@ -1312,7 +1312,7 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 	}
 
 	// Initialize image buffer
-	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true)
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logging.NewTestLogger(t), true, 0)
 
 	// Add data management context
 
@@ -1364,4 +1364,173 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 		}
 	}
 	test.That(t, duplicateFound, test.ShouldBeFalse)
+}
+
+func TestCooldownValidation(t *testing.T) {
+	conf := &Config{
+		Camera:         "my_camera",
+		Vision:         "my_vision",
+		WindowSeconds:  10,
+		ImageFrequency: 1.0,
+	}
+
+	// cooldown_s = 0 (default) should be valid
+	conf.CooldownSecs = 0
+	res, _, err := conf.Validate(".")
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+
+	// cooldown_s = 30 should be valid
+	conf.CooldownSecs = 30
+	res, _, err = conf.Validate(".")
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+
+	// cooldown_s = -1 should fail validation
+	conf.CooldownSecs = -1
+	res, _, err = conf.Validate(".")
+	test.That(t, res, test.ShouldBeNil)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "cooldown_s cannot be negative")
+}
+
+func TestCooldownSuppressesNewTrigger(t *testing.T) {
+	// Tests that during cooldown period, new triggers are suppressed and ErrNoCaptureToStore is returned
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	captureCount := 0
+	imagesCam := inject.NewCamera("test_camera")
+	imagesCam.ImagesFunc = func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		captureCount++
+		imageTime := baseTime.Add(time.Duration(captureCount) * time.Second)
+		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", captureCount), "image/jpeg", data.Annotations{})
+		return []camera.NamedImage{img}, resource.ResponseMetadata{CapturedAt: imageTime}, nil
+	}
+
+	// Vision service always triggers
+	visionSvc := inject.NewVisionService("test_vision")
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.9, "person"),
+		}, nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications:     map[string]float64{"person": 0.8},
+			WindowSecondsBefore: 2,
+			WindowSecondsAfter:  2,
+			CooldownSecs:        10,
+			ImageFrequency:      1.0,
+			Debug:               true,
+		},
+		logger:                   logger,
+		cam:                      imagesCam,
+		otherVisionServices:      []vision.Service{visionSvc},
+		acceptedClassifications:  map[string]map[string]float64{"test_vision": {"person": 0.8}},
+		acceptedObjects:          map[string]map[string]float64{},
+		inhibitedClassifications: map[string]map[string]float64{},
+		inhibitedObjects:         map[string]map[string]float64{},
+		inhibitors:               []vision.Service{},
+	}
+
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logger, true, fc.conf.CooldownSecs)
+
+	// Build up ring buffer
+	for i := 0; i < 5; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+
+	// First trigger should succeed
+	images1, _, err1 := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err1, test.ShouldBeNil)
+	test.That(t, len(images1), test.ShouldBeGreaterThan, 0)
+
+	// Drain any remaining buffered images
+	fc.buf.ClearToSend()
+
+	// Set captureTill to the past to simulate capture window ending
+	// and cooldownTill to the future to simulate being in cooldown
+	pastCaptureTill := time.Now().Add(-1 * time.Second)
+	fc.buf.SetCaptureTill(pastCaptureTill)
+	fc.buf.SetCooldownTill(time.Now().Add(10 * time.Second))
+
+	// Next call should be suppressed by cooldown - despite vision service returning positive
+	images2, _, err2 := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err2, test.ShouldEqual, data.ErrNoCaptureToStore)
+	test.That(t, images2, test.ShouldBeNil)
+}
+
+func TestCooldownAllowsTriggerAfterExpiry(t *testing.T) {
+	// Tests that after cooldown expires, triggers work again
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+	baseTime := time.Now()
+
+	captureCount := 0
+	imagesCam := inject.NewCamera("test_camera")
+	imagesCam.ImagesFunc = func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) (
+		[]camera.NamedImage, resource.ResponseMetadata, error) {
+		captureCount++
+		imageTime := baseTime.Add(time.Duration(captureCount) * time.Second)
+		img, _ := camera.NamedImageFromImage(image.NewRGBA(image.Rect(0, 0, 10, 10)), fmt.Sprintf("img_%d", captureCount), "image/jpeg", data.Annotations{})
+		return []camera.NamedImage{img}, resource.ResponseMetadata{CapturedAt: imageTime}, nil
+	}
+
+	// Vision service always triggers
+	visionSvc := inject.NewVisionService("test_vision")
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		return classification.Classifications{
+			classification.NewClassification(0.9, "person"),
+		}, nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications:     map[string]float64{"person": 0.8},
+			WindowSecondsBefore: 2,
+			WindowSecondsAfter:  2,
+			CooldownSecs:        5,
+			ImageFrequency:      1.0,
+			Debug:               true,
+		},
+		logger:                   logger,
+		cam:                      imagesCam,
+		otherVisionServices:      []vision.Service{visionSvc},
+		acceptedClassifications:  map[string]map[string]float64{"test_vision": {"person": 0.8}},
+		acceptedObjects:          map[string]map[string]float64{},
+		inhibitedClassifications: map[string]map[string]float64{},
+		inhibitedObjects:         map[string]map[string]float64{},
+		inhibitors:               []vision.Service{},
+	}
+
+	fc.buf = imagebuffer.NewImageBuffer(0, fc.conf.ImageFrequency, fc.conf.WindowSecondsBefore, fc.conf.WindowSecondsAfter, logger, true, fc.conf.CooldownSecs)
+
+	// Build up ring buffer
+	for i := 0; i < 5; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+
+	// First trigger should succeed
+	images1, _, err1 := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err1, test.ShouldBeNil)
+	test.That(t, len(images1), test.ShouldBeGreaterThan, 0)
+
+	// Clear buffers and set captureTill and cooldownTill to the past to simulate expired cooldown
+	fc.buf.ClearToSend()
+	fc.buf.SetCaptureTill(time.Now().Add(-10 * time.Second))
+	fc.buf.SetCooldownTill(time.Now().Add(-5 * time.Second))
+
+	// Build up ring buffer again
+	for i := 0; i < 5; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+
+	// Should be able to trigger again after cooldown expired
+	images2, _, err2 := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err2, test.ShouldBeNil)
+	test.That(t, len(images2), test.ShouldBeGreaterThan, 0)
 }
