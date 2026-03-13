@@ -5,6 +5,7 @@ go 1.25.1
 require (
 	github.com/pkg/errors v0.9.1
 	github.com/rhysd/actionlint v1.7.8
+	go.opentelemetry.io/otel v1.38.0
 	go.viam.com/rdk v0.116.0
 	go.viam.com/test v1.2.4
 	go.viam.com/utils v0.4.13
@@ -203,7 +204,6 @@ require (
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
-	go.opentelemetry.io/otel v1.38.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.38.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0 // indirect
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect

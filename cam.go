@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
+	"go.viam.com/rdk/module/trace"
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
@@ -190,6 +192,8 @@ func init() {
 			fc.backgroundWorkers = utils.NewStoppableWorkerWithTicker(
 				time.Duration(1000.0/imageFreq)*time.Millisecond,
 				func(ctx context.Context) {
+					ctx, span := trace.StartSpan(ctx, "filteredcamera::bgWorker")
+					defer span.End()
 					fc.captureImageInBackground(ctx)
 				},
 			)
@@ -374,6 +378,8 @@ func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.Name
 // It then returns the next image or images present in the ToSend buffer back to the client / data manager
 // singleImageMode indicates if this is called from Image() (true) or Images() (false)
 func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	ctx, span := trace.StartSpan(ctx, "filteredcamera::images")
+	defer span.End()
 	// Always call underlying camera to get fresh images
 	images, meta, err := fc.cam.Images(ctx, filterSourceNames, extra)
 	if err != nil {
@@ -460,6 +466,9 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 }
 
 func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedImage, now time.Time) (bool, data.Annotations, error) {
+	ctx, span := trace.StartSpan(ctx, "filteredcamera::shouldSend")
+	defer span.End()
+
 	img, err := namedImg.Image(ctx)
 	if err != nil {
 		return false, data.Annotations{}, err
@@ -467,31 +476,46 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
-			res, err := vs.Classifications(ctx, img, 100, nil)
+			inhibitorClassificationsCtx, inhibitorClassificationsSpan := trace.StartSpan(ctx, "filteredcamera::inhibitorClassifications")
+			res, err := vs.Classifications(inhibitorClassificationsCtx, img, 100, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting inhibited classifications")
+				inhibitorClassificationsSpan.RecordError(err)
+				inhibitorClassificationsSpan.End()
 				return false, data.Annotations{}, err
 			}
+			inhibitorClassificationsSpan.End()
 
 			match, label := fc.anyClassificationsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with classifications %v", res)
 				fc.rejectedStats.update(label[0].Label())
+				span.SetAttributes(
+					attribute.String("inhibited_by_vision_service", vs.Name().Name),
+					attribute.String("inhibited_label", label[0].Label()),
+				)
 				return false, data.Annotations{}, nil
 			}
 		}
 
 		if len(fc.inhibitedObjects[vs.Name().Name]) > 0 {
-			res, err := vs.Detections(ctx, img, nil)
+			inhibitorDetectionsCtx, inhibitorDetectionsSpan := trace.StartSpan(ctx, "filteredcamera::inhibitorDetections")
+			res, err := vs.Detections(inhibitorDetectionsCtx, img, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting inhibited detections")
+				inhibitorDetectionsSpan.End()
 				return false, data.Annotations{}, err
 			}
+			inhibitorDetectionsSpan.End()
 
 			match, label := fc.anyDetectionsMatch(vs.Name().Name, res, true)
 			if match {
 				fc.logger.Debugf("rejecting image with objects %v", res)
 				fc.rejectedStats.update(label[0].Label())
+				span.SetAttributes(
+					attribute.String("inhibited_by_vision_service", vs.Name().Name),
+					attribute.String("inhibited_label", label[0].Label()),
+				)
 				return false, data.Annotations{}, nil
 			}
 		}
@@ -499,36 +523,52 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 
 	for _, vs := range fc.otherVisionServices {
 		if len(fc.acceptedClassifications[vs.Name().Name]) > 0 {
-			res, err := vs.Classifications(ctx, img, 100, nil)
+			acceptedClassificationsCtx, acceptedClassificationsSpan := trace.StartSpan(ctx, "filteredcamera::acceptedClassifications")
+			res, err := vs.Classifications(acceptedClassificationsCtx, img, 100, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting non-inhibited classifications")
+				acceptedClassificationsSpan.RecordError(err)
+				acceptedClassificationsSpan.End()
 				return false, data.Annotations{}, err
 			}
+			acceptedClassificationsSpan.End()
 
 			match, labels := fc.anyClassificationsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with classifications %v", res)
 				for _, label := range labels {
+					// Don't include labels in attributes here for now to avoid high cardinality.
 					fc.acceptedStats.update(label.Label())
 				}
+				span.SetAttributes(
+					attribute.String("accepted_by_vision_service", vs.Name().Name),
+				)
 				annotations := classificationToAnnotations(labels)
 				return true, annotations, nil
 			}
 		}
 
 		if len(fc.acceptedObjects[vs.Name().Name]) > 0 {
-			res, err := vs.Detections(ctx, img, nil)
+			acceptedDetectionsCtx, acceptedDetectionsSpan := trace.StartSpan(ctx, "filteredcamera::acceptedDetections")
+			res, err := vs.Detections(acceptedDetectionsCtx, img, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting non-inhibited detections")
+				acceptedDetectionsSpan.RecordError(err)
+				acceptedDetectionsSpan.End()
 				return false, data.Annotations{}, err
 			}
+			acceptedDetectionsSpan.End()
 
 			match, labels := fc.anyDetectionsMatch(vs.Name().Name, res, false)
 			if match {
 				fc.logger.Debugf("keeping image with objects %v", res)
 				for _, label := range labels {
+					// Don't include labels in attributes here for now to avoid high cardinality.
 					fc.acceptedStats.update(label.Label())
 				}
+				span.SetAttributes(
+					attribute.String("accepted_by_vision_service", vs.Name().Name),
+				)
 				annotations := detectionsToAnnotations(labels)
 				return true, annotations, nil
 			}
