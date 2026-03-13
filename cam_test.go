@@ -12,7 +12,6 @@ import (
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
-	"go.viam.com/rdk/rimage"
 	"go.viam.com/rdk/services/vision"
 	"go.viam.com/rdk/testutils/inject"
 	"go.viam.com/rdk/utils"
@@ -388,43 +387,6 @@ func TestValidate(t *testing.T) {
 	test.That(t, err.Error(), test.ShouldContainSubstring, "one of window_seconds, window_seconds_after, or window_seconds_before can be negative")
 }
 
-func TestImage(t *testing.T) {
-	logger := logging.NewTestLogger(t)
-
-	fc := &filteredCamera{
-		conf: &Config{
-			Classifications: map[string]float64{"a": .8},
-			Objects:         map[string]float64{"b": .8},
-			WindowSeconds:   10,
-			ImageFrequency:  1.0,
-		},
-		logger: logger,
-		otherVisionServices: []vision.Service{
-			getDummyVisionService(),
-		},
-		buf: imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
-		cam: &inject.Camera{
-			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-				imgA, _ := camera.NamedImageFromImage(a, "", "image/jpeg", data.Annotations{})
-				imgB, _ := camera.NamedImageFromImage(b, "", "image/jpeg", data.Annotations{})
-				imgC, _ := camera.NamedImageFromImage(c, "", "image/jpeg", data.Annotations{})
-				return []camera.NamedImage{imgA, imgB, imgC}, resource.ResponseMetadata{CapturedAt: time.Now()}, nil
-			},
-		},
-		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
-		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
-	}
-
-	ctx := context.Background()
-
-	res, meta, err := fc.Image(ctx, utils.MimeTypeJPEG, map[string]interface{}{data.FromDMString: true})
-	// Trigger occurs and the annotated trigger image is stored in the buffer
-	test.That(t, err, test.ShouldBeNil)
-	test.That(t, res, test.ShouldNotBeNil)
-
-	test.That(t, meta, test.ShouldNotBeNil)
-}
-
 func TestImages(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 
@@ -498,20 +460,6 @@ func TestImageWithBufferedImages(t *testing.T) {
 
 	img2, _ := camera.NamedImageFromImage(b, "buffered_img_2", "image/jpeg", data.Annotations{})
 	fc.buf.AddToRingBuffer([]camera.NamedImage{img2}, resource.ResponseMetadata{CapturedAt: baseTime.Add(-1 * time.Second)})
-
-	ctx := context.Background()
-
-	res, meta, err := fc.Image(ctx, utils.MimeTypeJPEG, nil)
-	test.That(t, err, test.ShouldBeNil)
-	test.That(t, res, test.ShouldNotBeNil)
-
-	// Should get one of the buffered images (with timestamp naming)
-	decodedImage, err := rimage.EncodeImage(ctx, a, utils.MimeTypeJPEG)
-	test.That(t, err, test.ShouldBeNil)
-	test.That(t, res, test.ShouldResemble, decodedImage)
-
-	test.That(t, meta, test.ShouldNotBeNil)
-	test.That(t, meta.MimeType, test.ShouldResemble, utils.MimeTypeJPEG)
 }
 
 func TestImagesWithBufferedImages(t *testing.T) {

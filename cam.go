@@ -349,15 +349,6 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 	return fc.formatStats(), nil
 }
 
-func (fc *filteredCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := fc.images(ctx, nil, extra, true) // true indicates single image mode
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-
-	return ImagesToImage(ctx, ni)
-}
-
 func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
 }

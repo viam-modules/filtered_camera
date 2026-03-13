@@ -118,15 +118,6 @@ func (cc *conditionalCamera) DoCommand(ctx context.Context, cmd map[string]inter
 	return nil, resource.ErrDoUnimplemented
 }
 
-func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := cc.images(ctx, extra, true) // true indicates single image mode
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-
-	return filtered_camera.ImagesToImage(ctx, ni)
-}
-
 func (cc *conditionalCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return cc.images(ctx, extra, false) // false indicates multiple images mode
 }

@@ -39,7 +39,13 @@ func realMain() error {
 
 	var appConn rpc.ClientConn
 	if conf.Cloud != nil && conf.Cloud.AppAddress != "" {
-		appConn, err = grpc.NewAppConn(ctx, conf.Cloud.AppAddress, conf.Cloud.Secret, conf.Cloud.ID, logger)
+		appConn, err = grpc.NewAppConn(
+			ctx,
+			conf.Cloud.AppAddress,
+			conf.Cloud.Secret,
+			conf.Cloud.GetCloudCredsDialOpt(),
+			logger,
+		)
 		if err != nil {
 			return nil
 		}
