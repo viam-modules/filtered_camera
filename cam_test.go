@@ -52,7 +52,11 @@ var (
 
 func getDummyVisionService() vision.Service {
 	svc := &inject.VisionService{}
-	svc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	svc.ClassificationsFunc = func(ctx context.Context, namedImg *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
+		img, err := namedImg.Image(ctx)
+		if err != nil {
+			return nil, err
+		}
 		if img == a {
 			return classification.Classifications{classification.NewClassification(.9, "a")}, nil
 		}
@@ -65,7 +69,11 @@ func getDummyVisionService() vision.Service {
 		return classification.Classifications{}, nil
 	}
 
-	svc.DetectionsFunc = func(ctx context.Context, img image.Image, extra map[string]interface{}) ([]objectdetection.Detection, error) {
+	svc.DetectionsFunc = func(ctx context.Context, namedImg *camera.NamedImage, extra map[string]interface{}) ([]objectdetection.Detection, error) {
+		img, err := namedImg.Image(ctx)
+		if err != nil {
+			return nil, err
+		}
 		r := image.Rect(1, 1, 1, 1)
 		if img == c {
 			return []objectdetection.Detection{objectdetection.NewDetection(r, r, .1, "b")}, nil
@@ -759,7 +767,7 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 
 	// Create vision service that initially doesn't trigger (below threshold)
 	visionSvc := inject.NewVisionService("test_vision")
-	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
 		return classification.Classifications{
 			classification.NewClassification(0.5, "person"), // Below 0.8 threshold - no trigger
 		}, nil
@@ -805,7 +813,7 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0)
 
 	// Change vision service to trigger condition
-	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
 		return classification.Classifications{
 			classification.NewClassification(0.9, "person"), // Above 0.8 threshold - should trigger
 		}, nil
@@ -843,7 +851,7 @@ func TestBatchingWithFrequencyMismatch(t *testing.T) {
 	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0) // Should be empty after PopAllToSend
 
 	// Change vision service back to non-trigger condition
-	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
 		return classification.Classifications{
 			classification.NewClassification(0.5, "person"), // Below 0.8 threshold - no trigger
 		}, nil
@@ -913,7 +921,7 @@ func TestOverlappingTriggerWindows(t *testing.T) {
 	// Create vision service that triggers when we want it to
 	visionSvc := inject.NewVisionService("test_vision")
 	shouldTrigger := false
-	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
 		if shouldTrigger {
 			return classification.Classifications{
 				classification.NewClassification(0.9, "person"), // Above 0.8 threshold - triggers
@@ -1061,7 +1069,7 @@ func TestCurrentImageTimestampingInCaptureWindow(t *testing.T) {
 
 	// Create vision service that always triggers (for easy window setup)
 	visionSvc := inject.NewVisionService("test_vision")
-	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
 		return classification.Classifications{
 			classification.NewClassification(0.9, "person"), // Above 0.8 threshold - triggers
 		}, nil
@@ -1235,7 +1243,7 @@ func TestNoDuplicateImagesAcrossGetImagesCalls(t *testing.T) {
 
 	// Create vision service that always triggers
 	visionSvc := inject.NewVisionService("test_vision")
-	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
 		return classification.Classifications{
 			classification.NewClassification(0.9, "person"), // Always triggers
 		}, nil
@@ -1360,7 +1368,7 @@ func TestCooldownSuppressesNewTrigger(t *testing.T) {
 
 	// Vision service always triggers
 	visionSvc := inject.NewVisionService("test_vision")
-	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
 		return classification.Classifications{
 			classification.NewClassification(0.9, "person"),
 		}, nil
@@ -1430,7 +1438,7 @@ func TestCooldownAllowsTriggerAfterExpiry(t *testing.T) {
 
 	// Vision service always triggers
 	visionSvc := inject.NewVisionService("test_vision")
-	visionSvc.ClassificationsFunc = func(ctx context.Context, img image.Image, n int, extra map[string]interface{}) (classification.Classifications, error) {
+	visionSvc.ClassificationsFunc = func(ctx context.Context, img *camera.NamedImage, n int, extra map[string]interface{}) (classification.Classifications, error) {
 		return classification.Classifications{
 			classification.NewClassification(0.9, "person"),
 		}, nil

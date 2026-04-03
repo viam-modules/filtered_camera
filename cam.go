@@ -349,6 +349,10 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 	return fc.formatStats(), nil
 }
 
+func (fc *filteredCamera) Status(ctx context.Context) (map[string]interface{}, error) {
+	return fc.formatStats(), nil
+}
+
 func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
 }
@@ -465,15 +469,11 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 	ctx, span := trace.StartSpan(ctx, "filteredcamera::shouldSend")
 	defer span.End()
 
-	img, err := namedImg.Image(ctx)
-	if err != nil {
-		return false, data.Annotations{}, err
-	}
 	// inhibitors are first priority
 	for _, vs := range fc.inhibitors {
 		if len(fc.inhibitedClassifications[vs.Name().Name]) > 0 {
 			inhibitorClassificationsCtx, inhibitorClassificationsSpan := trace.StartSpan(ctx, "filteredcamera::inhibitorClassifications")
-			res, err := vs.Classifications(inhibitorClassificationsCtx, img, 100, nil)
+			res, err := vs.Classifications(inhibitorClassificationsCtx, &namedImg, 100, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting inhibited classifications")
 				inhibitorClassificationsSpan.RecordError(err)
@@ -496,7 +496,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 
 		if len(fc.inhibitedObjects[vs.Name().Name]) > 0 {
 			inhibitorDetectionsCtx, inhibitorDetectionsSpan := trace.StartSpan(ctx, "filteredcamera::inhibitorDetections")
-			res, err := vs.Detections(inhibitorDetectionsCtx, img, nil)
+			res, err := vs.Detections(inhibitorDetectionsCtx, &namedImg, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting inhibited detections")
 				inhibitorDetectionsSpan.End()
@@ -520,7 +520,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 	for _, vs := range fc.otherVisionServices {
 		if len(fc.acceptedClassifications[vs.Name().Name]) > 0 {
 			acceptedClassificationsCtx, acceptedClassificationsSpan := trace.StartSpan(ctx, "filteredcamera::acceptedClassifications")
-			res, err := vs.Classifications(acceptedClassificationsCtx, img, 100, nil)
+			res, err := vs.Classifications(acceptedClassificationsCtx, &namedImg, 100, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting non-inhibited classifications")
 				acceptedClassificationsSpan.RecordError(err)
@@ -546,7 +546,7 @@ func (fc *filteredCamera) shouldSend(ctx context.Context, namedImg camera.NamedI
 
 		if len(fc.acceptedObjects[vs.Name().Name]) > 0 {
 			acceptedDetectionsCtx, acceptedDetectionsSpan := trace.StartSpan(ctx, "filteredcamera::acceptedDetections")
-			res, err := vs.Detections(acceptedDetectionsCtx, img, nil)
+			res, err := vs.Detections(acceptedDetectionsCtx, &namedImg, nil)
 			if err != nil {
 				fc.logger.Warnf("error getting non-inhibited detections")
 				acceptedDetectionsSpan.RecordError(err)
