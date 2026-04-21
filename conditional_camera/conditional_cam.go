@@ -73,7 +73,7 @@ func init() {
 				return nil, err
 			}
 
-			cc := &conditionalCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
+			cc := &conditionalCamera{Named: conf.ResourceName().AsNamed(), conf: newConf, logger: logger}
 
 			cc.cam, err = camera.FromDependencies(deps, newConf.Camera)
 			if err != nil {
@@ -100,6 +100,7 @@ func init() {
 type conditionalCamera struct {
 	resource.AlwaysRebuild
 	resource.TriviallyCloseable
+	resource.Named
 
 	name   resource.Name
 	conf   *Config

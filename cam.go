@@ -125,7 +125,7 @@ func init() {
 				return nil, err
 			}
 
-			fc := &filteredCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
+			fc := &filteredCamera{Named: conf.ResourceName().AsNamed(), conf: newConf, logger: logger}
 
 			fc.cam, err = camera.FromDependencies(deps, newConf.Camera)
 			if err != nil {
@@ -205,8 +205,8 @@ func init() {
 
 type filteredCamera struct {
 	resource.AlwaysRebuild
+	resource.Named
 
-	name   resource.Name
 	conf   *Config
 	logger logging.Logger
 
@@ -326,10 +326,6 @@ func (fc *filteredCamera) detectionMatches(visionService string, d objectdetecti
 	}
 
 	return false
-}
-
-func (fc *filteredCamera) Name() resource.Name {
-	return fc.name
 }
 
 func (fc *filteredCamera) Close(ctx context.Context) error {
