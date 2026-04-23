@@ -73,7 +73,7 @@ func init() {
 				return nil, err
 			}
 
-			cc := &conditionalCamera{name: conf.ResourceName(), conf: newConf, logger: logger}
+			cc := &conditionalCamera{Named: conf.ResourceName().AsNamed(), conf: newConf, logger: logger}
 
 			cc.cam, err = camera.FromDependencies(deps, newConf.Camera)
 			if err != nil {
@@ -100,6 +100,7 @@ func init() {
 type conditionalCamera struct {
 	resource.AlwaysRebuild
 	resource.TriviallyCloseable
+	resource.Named
 
 	name   resource.Name
 	conf   *Config
@@ -116,15 +117,6 @@ func (cc *conditionalCamera) Name() resource.Name {
 
 func (cc *conditionalCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
 	return nil, resource.ErrDoUnimplemented
-}
-
-func (cc *conditionalCamera) Image(ctx context.Context, mimeType string, extra map[string]interface{}) ([]byte, camera.ImageMetadata, error) {
-	ni, _, err := cc.images(ctx, extra, true) // true indicates single image mode
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
-	}
-
-	return filtered_camera.ImagesToImage(ctx, ni)
 }
 
 func (cc *conditionalCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
