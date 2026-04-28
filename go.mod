@@ -6,7 +6,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rhysd/actionlint v1.7.8
 	go.opentelemetry.io/otel v1.40.0
-	go.viam.com/rdk v0.123.0
+	go.viam.com/rdk v0.124.0-rc0.0.20260428155858-62da9535aca4
 	go.viam.com/test v1.2.4
 	go.viam.com/utils v0.4.19
 )
@@ -153,7 +153,7 @@ require (
 	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/mdns v0.0.12 // indirect
 	github.com/pion/mdns/v2 v2.1.0 // indirect
-	github.com/pion/mediadevices v0.9.0 // indirect
+	github.com/pion/mediadevices v0.10.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.16 // indirect
 	github.com/pion/rtp v1.8.26 // indirect

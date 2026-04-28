@@ -349,10 +349,6 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 	return fc.formatStats(), nil
 }
 
-func (fc *filteredCamera) Status(ctx context.Context) (map[string]interface{}, error) {
-	return fc.formatStats(), nil
-}
-
 func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
 }
