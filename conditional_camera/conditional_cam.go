@@ -119,6 +119,10 @@ func (cc *conditionalCamera) DoCommand(ctx context.Context, cmd map[string]inter
 	return nil, resource.ErrDoUnimplemented
 }
 
+func (cc *conditionalCamera) Status(ctx context.Context) (map[string]interface{}, error) {
+	return nil, nil
+}
+
 func (cc *conditionalCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	return cc.images(ctx, extra, false) // false indicates multiple images mode
 }
