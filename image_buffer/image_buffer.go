@@ -51,12 +51,6 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 	} else {
 		maxImages = int(3 * float64(windowSecondsBefore+windowSecondsAfter) * imageFrequency)
 	}
-	// With all-zero windows only trigger images are queued, so keep a floor on
-	// the warning threshold to avoid warning on every capture.
-	warningThreshold := maxImages * 2
-	if warningThreshold < minToSendWarningThreshold {
-		warningThreshold = minToSendWarningThreshold
-	}
 	return &ImageBuffer{
 		ringBuffer:          []CachedData{},
 		toSend:              []CachedData{},
@@ -67,8 +61,9 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		maxImages:           maxImages,
 		logger:              logger,
 		debug:               debug,
-		// Set warning threshold to 2x expected buffer size to detect when consumption is lagging
-		toSendMaxWarningThreshold: warningThreshold,
+		// Set warning threshold to 2x expected buffer size to detect when consumption is lagging,
+		// with a floor so zero-window configs don't warn on every trigger image
+		toSendMaxWarningThreshold: max(maxImages*2, minToSendWarningThreshold),
 	}
 }
 
