@@ -94,6 +94,32 @@ func TestWindowBoundaries(t *testing.T) {
 
 }
 
+func TestZeroWindowCapturesOnlyTriggerImage(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	// All window values zero: no surrounding images are buffered
+	buf := NewImageBuffer(0, 1.0, 0, 0, logger, true, 0)
+
+	triggerTime := time.Now()
+
+	// Images captured before the trigger never make it into ToSend
+	buf.StoreImages(nil, resource.ResponseMetadata{CapturedAt: triggerTime.Add(-1 * time.Second)}, triggerTime.Add(-1*time.Second))
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 0)
+
+	buf.MarkShouldSend(triggerTime)
+
+	// The capture window collapses to the trigger instant, so only the
+	// triggering image itself is queued
+	test.That(t, buf.IsWithinCaptureWindow(triggerTime), test.ShouldBeTrue)
+	buf.StoreImages(nil, resource.ResponseMetadata{CapturedAt: triggerTime}, triggerTime)
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 1)
+
+	// Images after the trigger are outside the window
+	after := triggerTime.Add(1 * time.Second)
+	test.That(t, buf.IsWithinCaptureWindow(after), test.ShouldBeFalse)
+	buf.StoreImages(nil, resource.ResponseMetadata{CapturedAt: after}, after)
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 1)
+}
+
 func TestCooldownBlocksRetrigger(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 	// cooldown=5s, window=2s (before and after)

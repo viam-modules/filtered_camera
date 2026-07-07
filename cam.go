@@ -73,11 +73,8 @@ func (cfg *Config) Validate(path string) ([]string, []string, error) {
 		return nil, nil, utils.NewConfigValidationError(path, errors.New("image_frequency cannot be less than 0"))
 	}
 
-	if cfg.WindowSeconds == 0 && cfg.WindowSecondsBefore == 0 && cfg.WindowSecondsAfter == 0 {
-		return nil, nil, utils.NewConfigValidationError(path,
-			errors.New("window_seconds, window_seconds_after, and window_seconds_before cannot all be zero"))
-	}
-
+	// All window values may be zero: in that case no surrounding images are
+	// buffered and only the image that triggered the filter is captured.
 	if cfg.WindowSeconds < 0 || cfg.WindowSecondsBefore < 0 || cfg.WindowSecondsAfter < 0 {
 		return nil, nil, utils.NewConfigValidationError(path,
 			errors.New("none of window_seconds, window_seconds_after, or window_seconds_before can be negative"))

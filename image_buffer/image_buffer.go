@@ -12,6 +12,9 @@ import (
 const (
 	timestampFormat = "2006-01-02T15:04:05.000Z07:00"
 	noDateString    = "no-date"
+	// minToSendWarningThreshold is the smallest ToSend buffer size that can
+	// trigger a lagging-consumption warning.
+	minToSendWarningThreshold = 10
 )
 
 type CachedData struct {
@@ -48,6 +51,12 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 	} else {
 		maxImages = int(3 * float64(windowSecondsBefore+windowSecondsAfter) * imageFrequency)
 	}
+	// With all-zero windows only trigger images are queued, so keep a floor on
+	// the warning threshold to avoid warning on every capture.
+	warningThreshold := maxImages * 2
+	if warningThreshold < minToSendWarningThreshold {
+		warningThreshold = minToSendWarningThreshold
+	}
 	return &ImageBuffer{
 		ringBuffer:          []CachedData{},
 		toSend:              []CachedData{},
@@ -59,7 +68,7 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		logger:              logger,
 		debug:               debug,
 		// Set warning threshold to 2x expected buffer size to detect when consumption is lagging
-		toSendMaxWarningThreshold: maxImages * 2,
+		toSendMaxWarningThreshold: warningThreshold,
 	}
 }
 
