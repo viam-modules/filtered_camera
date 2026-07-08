@@ -12,6 +12,9 @@ import (
 const (
 	timestampFormat = "2006-01-02T15:04:05.000Z07:00"
 	noDateString    = "no-date"
+	// minToSendWarningThreshold is the smallest ToSend buffer size that can
+	// trigger a lagging-consumption warning.
+	minToSendWarningThreshold = 10
 )
 
 type CachedData struct {
@@ -58,8 +61,9 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		maxImages:           maxImages,
 		logger:              logger,
 		debug:               debug,
-		// Set warning threshold to 2x expected buffer size to detect when consumption is lagging
-		toSendMaxWarningThreshold: maxImages * 2,
+		// Set warning threshold to 2x expected buffer size to detect when consumption is lagging,
+		// with a floor so zero-window configs don't warn on every trigger image
+		toSendMaxWarningThreshold: max(maxImages*2, minToSendWarningThreshold),
 	}
 }
 
