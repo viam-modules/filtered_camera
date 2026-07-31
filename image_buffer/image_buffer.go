@@ -256,34 +256,6 @@ func (ib *ImageBuffer) GetToSendDropped() int {
 	return ib.toSendDropped
 }
 
-// PopFirstToSend removes and returns the first element from toSend slice
-func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
-	ib.mu.Lock()
-	defer ib.mu.Unlock()
-	if len(ib.toSend) == 0 {
-		if ib.debug {
-			ib.logger.Infow("PopFirstToSend buffer empty",
-				"method", "PopFirstToSend",
-				"toSendSize", 0)
-		}
-		return CachedData{}, false
-	}
-	x := ib.toSend[0]
-	ib.toSend = ib.toSend[1:]
-
-	// Apply timestamp naming to the images
-	x.Imgs = TimestampImagesToNames(x.Imgs, x.Meta)
-
-	if ib.debug {
-		remainingLen := len(ib.toSend)
-		ib.logger.Infow("PopFirstToSend consumed image",
-			"method", "PopFirstToSend",
-			"imagesConsumed", 1,
-			"remainingToSendSize", remainingLen)
-	}
-	return x, true
-}
-
 // TimestampImagesToNames converts images to have timestamp-based names in format "[timestamp]_[original_name]"
 func TimestampImagesToNames(images []camera.NamedImage, meta resource.ResponseMetadata) []camera.NamedImage {
 	result := make([]camera.NamedImage, len(images))

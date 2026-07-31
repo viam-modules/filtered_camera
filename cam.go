@@ -367,30 +367,22 @@ func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interfac
 }
 
 func (fc *filteredCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return fc.images(ctx, filterSourceNames, extra, false) // false indicates multiple images mode
+	return fc.images(ctx, filterSourceNames, extra)
 }
 
-// getBufferedImages returns images from the ToSend buffer depending on the image mode.
-// single image just returns the first image in the queue, while otherwise it returns the whole buffer
+// getBufferedImages returns the whole ToSend buffer as one batch.
 // if ToSend is empty, returns false
-func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, bool) {
-	if singleImageMode {
-		if x, ok := fc.buf.PopFirstToSend(); ok {
-			return x.Imgs, x.Meta, true
-		}
-	} else {
-		if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
-			return allImages, batchMeta, true
-		}
+func (fc *filteredCamera) getBufferedImages() ([]camera.NamedImage, resource.ResponseMetadata, bool) {
+	if allImages, batchMeta, ok := fc.buf.PopAllToSend(); ok {
+		return allImages, batchMeta, true
 	}
 	// ToSend buffer is empty - no images to capture
 	return nil, resource.ResponseMetadata{}, false
 }
 
 // images checks to see if the trigger is fulfilled or inhibited, and sets the flag to send images
-// It then returns the next image or images present in the ToSend buffer back to the client / data manager
-// singleImageMode indicates if this is called from Image() (true) or Images() (false)
-func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+// It then returns the images present in the ToSend buffer back to the client / data manager
+func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	ctx, span := trace.StartSpan(ctx, "filteredcamera::images")
 	defer span.End()
 	// Always call underlying camera to get fresh images
@@ -409,11 +401,10 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 		if fc.conf.Debug {
 			fc.logger.Infow("Skipping filter checks",
 				"method", "images",
-				"singleImageMode", singleImageMode,
 				"capturedAt", meta.CapturedAt,
 				"withinCaptureWindow", true)
 		}
-		if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+		if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(); ok {
 			return bufferedImages, bufferedMeta, nil
 		}
 		// If no buffered images, return current image (we're in capture mode)
@@ -427,12 +418,11 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 		if fc.conf.Debug {
 			fc.logger.Infow("Skipping trigger checks - in cooldown period",
 				"method", "images",
-				"singleImageMode", singleImageMode,
 				"capturedAt", meta.CapturedAt,
 				"inCooldown", true)
 		}
 		// Still return any remaining buffered images from the previous trigger
-		if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+		if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(); ok {
 			return bufferedImages, bufferedMeta, nil
 		}
 		return nil, meta, data.ErrNoCaptureToStore
@@ -441,7 +431,6 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 	if fc.conf.Debug {
 		fc.logger.Infow("Running filter checks",
 			"method", "images",
-			"singleImageMode", singleImageMode,
 			"capturedAt", meta.CapturedAt,
 			"withinCaptureWindow", false)
 	}
@@ -461,7 +450,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 
 			fc.buf.StoreImages([]camera.NamedImage{img}, meta, meta.CapturedAt)
 
-			if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+			if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(); ok {
 				return bufferedImages, bufferedMeta, nil
 			}
 
@@ -471,7 +460,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 		}
 	}
 	// No triggers met and we're outside capture window, but check if we have buffered images from previous triggers
-	if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(singleImageMode); ok {
+	if bufferedImages, bufferedMeta, ok := fc.getBufferedImages(); ok {
 		return bufferedImages, bufferedMeta, nil
 	}
 

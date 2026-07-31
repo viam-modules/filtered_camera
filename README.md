@@ -72,13 +72,12 @@ On the new component panel, copy and paste the following attribute template into
 Remove the "classifications" or "objects" section depending on if your ML model is a classifier or detector.
 
 > [!NOTE]
-> The filtered camera can be configured with both `ReadImage` and `Images` methods for data management. The camera detects data management calls through context and extra parameters to apply filtering only when appropriate.
+> The filtered camera detects data management calls through context and extra parameters, so it applies filtering only when appropriate.
 
 > [!NOTE]
 > The filtered camera behaves differently depending on how it's called:
 > - **Data management calls**: Apply filtering and return buffered images with timestamp-based names
 > - **Non-data management calls**: Bypass filtering and return images directly from the underlying camera
-> - **`Image()` method**: Returns a single image from the buffer  
 > - **`Images()` method**: Returns all available images from the buffer in chronological order
 
 > [!NOTE]
