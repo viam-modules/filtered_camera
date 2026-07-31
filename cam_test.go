@@ -1491,6 +1491,49 @@ func TestCooldownAllowsTriggerAfterExpiry(t *testing.T) {
 	test.That(t, len(images2), test.ShouldBeGreaterThan, 0)
 }
 
+// TestBackgroundCaptureWithUnstampedCamera reproduces the crash on
+// bijan-test-windows-2: a source camera that returned an empty ResponseMetadata left
+// CapturedAt at the zero time, which compared equal to the not-yet-initialized
+// captureFrom, so every background frame was filed as "inside the capture window" and
+// appended to the unbounded ToSend buffer until the module ran out of memory.
+func TestBackgroundCaptureWithUnstampedCamera(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Camera:         "unstamped-cam",
+			WindowSeconds:  20,
+			ImageFrequency: 1.0,
+		},
+		logger: logger,
+		buf:    imagebuffer.NewImageBuffer(20, 1.0, 0, 0, logger, false, 0),
+		cam: &inject.Camera{
+			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+				img, _ := camera.NamedImageFromImage(a, "unstamped", "image/jpeg", data.Annotations{})
+				// No CapturedAt: exactly what the misbehaving source camera sent.
+				return []camera.NamedImage{img}, resource.ResponseMetadata{}, nil
+			},
+		},
+	}
+
+	// Roughly what the crashed machine captured before it died, at 1Hz for 17 minutes.
+	for i := 0; i < 1024; i++ {
+		fc.captureImageInBackground(ctx)
+	}
+
+	// No trigger ever fired, so nothing may be queued for sending...
+	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, 0)
+	// ...and the frames belong in the bounded ring buffer instead.
+	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldBeGreaterThan, 0)
+	test.That(t, fc.buf.GetRingBufferLength(), test.ShouldBeLessThanOrEqualTo, 60)
+
+	// Buffered frames carry a usable timestamp rather than the zero time.
+	for _, cached := range fc.buf.GetRingBufferSlice() {
+		test.That(t, cached.Meta.CapturedAt.IsZero(), test.ShouldBeFalse)
+	}
+}
+
 // TestToSendStaysBoundedWhenNobodyConsumes covers the same machine from the other side:
 // a window is open and images keep arriving, but no consumer ever drains ToSend.
 func TestToSendStaysBoundedWhenNobodyConsumes(t *testing.T) {

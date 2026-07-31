@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -218,6 +219,25 @@ type filteredCamera struct {
 	acceptedObjects          map[string]map[string]float64
 	acceptedStats            imageStats
 	rejectedStats            imageStats
+	// missingCapturedAtOnce keeps the warning about an unstamped source camera to one
+	// line rather than one per captured frame.
+	missingCapturedAtOnce sync.Once
+}
+
+// normalizeCapturedAt substitutes wall-clock time when the source camera left
+// CapturedAt unset. A zero CapturedAt is not a usable instant: it compares equal to an
+// uninitialized capture window and sorts before every buffered image, so passing it
+// through leaves the buffer thinking a window is permanently open.
+func (fc *filteredCamera) normalizeCapturedAt(meta resource.ResponseMetadata) resource.ResponseMetadata {
+	if !meta.CapturedAt.IsZero() {
+		return meta
+	}
+	fc.missingCapturedAtOnce.Do(func() {
+		fc.logger.Warnf("camera %q returns images with no CapturedAt timestamp; falling back to this module's clock. "+
+			"Capture windows and image ordering will be approximate.", fc.conf.Camera)
+	})
+	meta.CapturedAt = time.Now()
+	return meta
 }
 
 type imageStats struct {
@@ -338,8 +358,8 @@ func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
 		fc.logger.Debugf("Error capturing image in background: %v", err)
 		return
 	}
-	now := meta.CapturedAt
-	fc.buf.StoreImages(images, meta, now)
+	meta = fc.normalizeCapturedAt(meta)
+	fc.buf.StoreImages(images, meta, meta.CapturedAt)
 }
 
 func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
@@ -382,6 +402,7 @@ func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string
 	if !IsFromDataMgmt(ctx, extra) {
 		return images, meta, nil
 	}
+	meta = fc.normalizeCapturedAt(meta)
 
 	// If we're still within an active capture window, skip filter checks
 	if fc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
