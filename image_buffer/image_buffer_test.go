@@ -185,3 +185,29 @@ func TestCooldownExtendsWithRetrigger(t *testing.T) {
 	test.That(t, buf.IsInCooldown(newCooldownTill), test.ShouldBeTrue)             // at boundary
 	test.That(t, buf.IsInCooldown(newCooldownTill.Add(1*time.Second)), test.ShouldBeFalse)
 }
+
+// TestZeroTimeIsNotWithinCaptureWindow covers the crash where a source camera that left
+// ResponseMetadata.CapturedAt unset made every frame land in the unbounded ToSend
+// buffer: before any trigger, captureFrom/captureTill are also the zero time, so the
+// inclusive boundary check reported "inside the window" for a window never opened.
+func TestZeroTimeIsNotWithinCaptureWindow(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	buf := NewImageBuffer(20, 1.0, 0, 0, logger, true, 0)
+
+	var zero time.Time
+	test.That(t, buf.IsWithinCaptureWindow(zero), test.ShouldBeFalse)
+	test.That(t, buf.IsWithinCaptureWindow(time.Now()), test.ShouldBeFalse)
+
+	// Unstamped frames must go to the bounded ring buffer, not to ToSend.
+	for i := 0; i < 500; i++ {
+		buf.StoreImages(nil, resource.ResponseMetadata{}, zero)
+	}
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 0)
+	test.That(t, buf.GetRingBufferLength(), test.ShouldBeLessThanOrEqualTo, buf.maxImages)
+
+	// An open window still must not swallow unstamped frames.
+	now := time.Now()
+	buf.MarkShouldSend(now)
+	test.That(t, buf.IsWithinCaptureWindow(zero), test.ShouldBeFalse)
+	test.That(t, buf.IsWithinCaptureWindow(now), test.ShouldBeTrue)
+}

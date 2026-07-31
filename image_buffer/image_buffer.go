@@ -67,6 +67,21 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 	}
 }
 
+// withinCaptureWindowLocked reports whether now falls inside the currently open capture
+// window. Callers must hold ib.mu.
+//
+// captureFrom and captureTill are the zero time until MarkShouldSend opens the first
+// window, and a camera that does not populate ResponseMetadata hands us a zero
+// CapturedAt. Comparing those two with Equal reports "inside the window" for a window
+// that was never opened, so both are rejected up front.
+func (ib *ImageBuffer) withinCaptureWindowLocked(now time.Time) bool {
+	if ib.captureTill.IsZero() || now.IsZero() {
+		return false
+	}
+	return (now.Before(ib.captureTill) && now.After(ib.captureFrom)) ||
+		now.Equal(ib.captureTill) || now.Equal(ib.captureFrom)
+}
+
 func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
@@ -314,7 +329,7 @@ func (ib *ImageBuffer) IsInCooldown(now time.Time) bool {
 func (ib *ImageBuffer) IsWithinCaptureWindow(now time.Time) bool {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
-	withinWindow := (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom)
+	withinWindow := ib.withinCaptureWindowLocked(now)
 
 	if ib.debug {
 		ib.logger.Infow("IsWithinCaptureWindow check",
@@ -336,7 +351,7 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 
 	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
 	// else then store them in the ring buffer
-	if (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom) {
+	if ib.withinCaptureWindowLocked(now) {
 		cd := CachedData{Imgs: images, Meta: meta}
 		ib.toSend = append(ib.toSend, cd)
 		toSendLen := len(ib.toSend)
