@@ -211,3 +211,58 @@ func TestZeroTimeIsNotWithinCaptureWindow(t *testing.T) {
 	test.That(t, buf.IsWithinCaptureWindow(zero), test.ShouldBeFalse)
 	test.That(t, buf.IsWithinCaptureWindow(now), test.ShouldBeTrue)
 }
+
+// TestToSendIsBounded covers the other half of the crash: ToSend had no cap, so a
+// consumer slower than image_frequency grew it until the module ran out of memory.
+func TestToSendIsBounded(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	buf := NewImageBuffer(20, 1.0, 0, 0, logger, false, 0)
+
+	maxToSend := buf.GetMaxToSend()
+	test.That(t, maxToSend, test.ShouldBeGreaterThan, buf.toSendMaxWarningThreshold)
+
+	// Open a capture window wide enough that every frame below is inside it.
+	start := time.Now()
+	buf.MarkShouldSend(start)
+
+	// Produce far more than the cap without ever consuming, as the crashed machine did.
+	total := maxToSend * 3
+	for i := 0; i < total; i++ {
+		buf.SetCaptureTill(start.Add(time.Hour))
+		buf.StoreImages(nil, resource.ResponseMetadata{CapturedAt: start.Add(time.Duration(i) * time.Millisecond)},
+			start.Add(time.Duration(i)*time.Millisecond))
+	}
+
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, maxToSend)
+	test.That(t, buf.GetToSendDropped(), test.ShouldEqual, total-maxToSend)
+
+	// The retained images must be the newest ones; the oldest are what got shed.
+	toSend := buf.GetToSendSlice()
+	test.That(t, toSend[len(toSend)-1].Meta.CapturedAt,
+		test.ShouldEqual, start.Add(time.Duration(total-1)*time.Millisecond))
+	test.That(t, toSend[0].Meta.CapturedAt,
+		test.ShouldEqual, start.Add(time.Duration(total-maxToSend)*time.Millisecond))
+}
+
+// TestMarkShouldSendRespectsToSendCap makes sure the ring-buffer drain path is capped
+// too, not just the direct StoreImages path.
+func TestMarkShouldSendRespectsToSendCap(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	buf := NewImageBuffer(20, 1.0, 0, 0, logger, false, 0)
+
+	maxToSend := buf.GetMaxToSend()
+	now := time.Now()
+
+	// Stuff the ring buffer past the ToSend cap, all inside the window MarkShouldSend
+	// will open, so a single trigger tries to promote all of them at once.
+	ring := make([]CachedData, 0, maxToSend*2)
+	for i := 0; i < maxToSend*2; i++ {
+		ring = append(ring, CachedData{Meta: resource.ResponseMetadata{CapturedAt: now.Add(time.Duration(-i) * time.Millisecond)}})
+	}
+	buf.ringBuffer = ring
+
+	buf.MarkShouldSend(now)
+
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, maxToSend)
+	test.That(t, buf.GetToSendDropped(), test.ShouldEqual, maxToSend)
+}

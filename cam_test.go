@@ -1490,3 +1490,36 @@ func TestCooldownAllowsTriggerAfterExpiry(t *testing.T) {
 	test.That(t, err2, test.ShouldBeNil)
 	test.That(t, len(images2), test.ShouldBeGreaterThan, 0)
 }
+
+// TestToSendStaysBoundedWhenNobodyConsumes covers the same machine from the other side:
+// a window is open and images keep arriving, but no consumer ever drains ToSend.
+func TestToSendStaysBoundedWhenNobodyConsumes(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Camera:         "busy-cam",
+			WindowSeconds:  20,
+			ImageFrequency: 1.0,
+		},
+		logger: logger,
+		buf:    imagebuffer.NewImageBuffer(20, 1.0, 0, 0, logger, false, 0),
+		cam: &inject.Camera{
+			ImagesFunc: func(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+				img, _ := camera.NamedImageFromImage(a, "img", "image/jpeg", data.Annotations{})
+				return []camera.NamedImage{img}, resource.ResponseMetadata{CapturedAt: time.Now()}, nil
+			},
+		},
+	}
+
+	for i := 0; i < 1024; i++ {
+		// Hold the capture window open the whole time, as a continuously-retriggering
+		// scene would, and never consume.
+		fc.buf.SetCaptureTill(time.Now().Add(time.Hour))
+		fc.captureImageInBackground(ctx)
+	}
+
+	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, fc.buf.GetMaxToSend())
+	test.That(t, fc.buf.GetToSendDropped(), test.ShouldEqual, 1024-fc.buf.GetMaxToSend())
+}

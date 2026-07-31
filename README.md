@@ -21,6 +21,8 @@ You are also able to customize the time before and the time after the capture cr
 
 The filtered camera uses a background worker that continuously captures images from the underlying camera at the specified frequency and stores them in a ring buffer. When trigger conditions are met, relevant images from the time window are moved to a send buffer for data management retrieval.
 
+Both buffers are bounded. The send buffer is only drained when data management asks for images, so if `image_frequency` is higher than your data capture frequency it will fill up. The module warns once when it passes its warning threshold and, if it reaches its hard limit, logs an error and discards the oldest images to protect the rest of the module. Seeing either message means `image_frequency` is set faster than the images are being consumed.
+
 When images are captured and buffered for data management, each image receives a timestamp-based name in the format `[timestamp]_[original_name]` to preserve capture timing information and ensure chronological ordering during data sync.
 
 **Annotations**: When a trigger condition is met, the image that triggered the capture includes the detection or classification annotations (bounding boxes or classification labels) that caused the trigger. Buffered images from before and after the trigger do not include annotations, only the trigger image itself is annotated. This allows you to easily identify which image in a capture sequence was the one that met your filter criteria.
