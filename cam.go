@@ -17,6 +17,7 @@ import (
 	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
+	"go.viam.com/rdk/vision/viscapture"
 	"go.viam.com/utils"
 
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
@@ -27,7 +28,14 @@ var Model = Family.WithModel("filtered-camera")
 const defaultImageFreq = 1.0
 
 type Config struct {
-	Camera string
+	// Camera is the name of the camera to grab images from. Exactly one of Camera or
+	// ImageVisionService must be set.
+	Camera string `json:"camera,omitempty"`
+	// ImageVisionService is the name of a vision service to grab images from instead of a camera.
+	// This is useful when the vision service manipulates the underlying camera image (e.g. crops,
+	// blurs, or annotates it) and that manipulated image is what should be filtered and buffered.
+	// Exactly one of Camera or ImageVisionService must be set.
+	ImageVisionService string `json:"image_vision_service,omitempty"`
 	// Deprecated: use VisionServices instead
 	Vision              string
 	VisionServices      []VisionServiceConfig `json:"vision_services,omitempty"`
@@ -59,8 +67,10 @@ func (config *VisionServiceConfig) Validate(path string) error {
 }
 
 func (cfg *Config) Validate(path string) ([]string, []string, error) {
-	if cfg.Camera == "" {
-		return nil, nil, utils.NewConfigValidationFieldRequiredError(path, "camera")
+	if cfg.Camera == "" && cfg.ImageVisionService == "" {
+		return nil, nil, utils.NewConfigValidationError(path, errors.New("must specify one of \"camera\" or \"image_vision_service\""))
+	} else if cfg.Camera != "" && cfg.ImageVisionService != "" {
+		return nil, nil, utils.NewConfigValidationError(path, errors.New("cannot specify both \"camera\" and \"image_vision_service\""))
 	}
 
 	if cfg.Vision == "" && cfg.VisionServices == nil {
@@ -87,7 +97,12 @@ func (cfg *Config) Validate(path string) ([]string, []string, error) {
 		return nil, nil, utils.NewConfigValidationError(path, errors.New("cooldown_s cannot be negative"))
 	}
 
-	deps := []string{cfg.Camera}
+	deps := []string{}
+	if cfg.Camera != "" {
+		deps = append(deps, cfg.Camera)
+	} else {
+		deps = append(deps, cfg.ImageVisionService)
+	}
 	inhibitors := []string{}
 	otherVisionServices := []string{}
 
@@ -124,13 +139,21 @@ func init() {
 
 			fc := &filteredCamera{Named: conf.ResourceName().AsNamed(), conf: newConf, logger: logger}
 
-			fc.cam, err = camera.FromDependencies(deps, newConf.Camera)
-			if err != nil {
-				return nil, err
+			if newConf.Camera != "" {
+				fc.cam, err = camera.FromProvider(deps, newConf.Camera)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				fc.imageVisionService, err = vision.FromProvider(deps, newConf.ImageVisionService)
+				if err != nil {
+					return nil, err
+				}
 			}
+
 			if newConf.Vision != "" {
 				fc.otherVisionServices = make([]vision.Service, 1)
-				fc.otherVisionServices[0], err = vision.FromDependencies(deps, newConf.Vision)
+				fc.otherVisionServices[0], err = vision.FromProvider(deps, newConf.Vision)
 				if err != nil {
 					return nil, err
 				}
@@ -151,7 +174,7 @@ func init() {
 				fc.inhibitedObjects = make(map[string]map[string]float64)
 				fc.acceptedObjects = make(map[string]map[string]float64)
 				for _, vs := range newConf.VisionServices {
-					visionService, err := vision.FromDependencies(deps, vs.Vision)
+					visionService, err := vision.FromProvider(deps, vs.Vision)
 					if err != nil {
 						return nil, err
 					}
@@ -208,6 +231,7 @@ type filteredCamera struct {
 	logger logging.Logger
 
 	cam                      camera.Camera
+	imageVisionService       vision.Service
 	buf                      *imagebuffer.ImageBuffer
 	backgroundWorkers        *utils.StoppableWorkers
 	inhibitors               []vision.Service
@@ -333,13 +357,42 @@ func (fc *filteredCamera) Close(ctx context.Context) error {
 }
 
 func (fc *filteredCamera) captureImageInBackground(ctx context.Context) {
-	images, meta, err := fc.cam.Images(ctx, nil, nil)
+	images, meta, err := fc.getSourceImages(ctx, nil, nil)
 	if err != nil {
 		fc.logger.Debugf("Error capturing image in background: %v", err)
 		return
 	}
 	now := meta.CapturedAt
 	fc.buf.StoreImages(images, meta, now)
+}
+
+// getSourceImages returns the base images to be filtered and buffered, pulling them either from
+// the configured camera or from the configured vision service.
+func (fc *filteredCamera) getSourceImages(
+	ctx context.Context, filterSourceNames []string, extra map[string]interface{},
+) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	if fc.cam != nil {
+		return fc.cam.Images(ctx, filterSourceNames, extra)
+	}
+	return fc.imagesFromVisionService(ctx, extra)
+}
+
+// imagesFromVisionService pulls the image from the vision service's CaptureAllFromCamera method,
+// which allows vision services that manipulate the underlying camera image (e.g. crops, blurs, or
+// annotates it) to be used as the image source instead of a camera.
+func (fc *filteredCamera) imagesFromVisionService(
+	ctx context.Context, extra map[string]interface{},
+) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+	capture, err := fc.imageVisionService.CaptureAllFromCamera(ctx, "", viscapture.CaptureOptions{ReturnImage: true}, extra)
+	if err != nil {
+		return nil, resource.ResponseMetadata{}, err
+	}
+	if capture.Image == nil {
+		return nil, resource.ResponseMetadata{}, fmt.Errorf(
+			"vision service %q did not return an image", fc.imageVisionService.Name().Name)
+	}
+	meta := resource.ResponseMetadata{CapturedAt: time.Now()}
+	return []camera.NamedImage{*capture.Image}, meta, nil
 }
 
 func (fc *filteredCamera) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
@@ -373,8 +426,8 @@ func (fc *filteredCamera) getBufferedImages(singleImageMode bool) ([]camera.Name
 func (fc *filteredCamera) images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	ctx, span := trace.StartSpan(ctx, "filteredcamera::images")
 	defer span.End()
-	// Always call underlying camera to get fresh images
-	images, meta, err := fc.cam.Images(ctx, filterSourceNames, extra)
+	// Always call the underlying image source to get fresh images
+	images, meta, err := fc.getSourceImages(ctx, filterSourceNames, extra)
 	if err != nil {
 		return images, meta, err
 	}
@@ -617,6 +670,11 @@ func (fc *filteredCamera) Geometries(ctx context.Context, extra map[string]inter
 }
 
 func (fc *filteredCamera) Properties(ctx context.Context) (camera.Properties, error) {
+	if fc.cam == nil {
+		// Images are sourced from a vision service rather than a camera dependency, so there's no
+		// underlying camera to ask for properties.
+		return camera.Properties{SupportsPCD: false}, nil
+	}
 	p, err := fc.cam.Properties(ctx)
 	if err == nil {
 		p.SupportsPCD = false
