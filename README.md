@@ -72,6 +72,9 @@ On the new component panel, copy and paste the following attribute template into
 Remove the "classifications" or "objects" section depending on if your ML model is a classifier or detector.
 
 > [!NOTE]
+> Instead of `camera`, you can set `image_vision_service` to the name of a vision service to use as the image source, useful when that vision service manipulates the underlying camera image (for example, cropping, blurring, or annotating it). `camera` and `image_vision_service` are mutually exclusive.
+
+> [!NOTE]
 > The filtered camera detects data management calls through context and extra parameters, so it applies filtering only when appropriate.
 
 > [!NOTE]
@@ -89,7 +92,8 @@ The following attributes are available for `viam:camera:filtered-camera` bases:
 
 | Name | Type | Inclusion | Description |
 | ---- | ------ | ------------ | ----------- |
-| `camera` | string | **Required** | The name of the camera to filter images for. |
+| `camera` | string | **Required*** | The name of the camera to grab images from. Exactly one of `camera` or `image_vision_service` must be set. |
+| `image_vision_service` | string | **Required*** | The name of a vision service to grab images from instead of a camera. Use this if your vision service manipulates the underlying camera image (for example, cropping, blurring, or annotating it) and you want to filter and buffer that manipulated image rather than the raw camera image. The vision service is called via its `CaptureAllFromCamera` method with `ReturnImage` set to true, so it must have its own camera configured to pull from. Exactly one of `camera` or `image_vision_service` must be set. |
 | `vision_services` | list | **Required** | A list of 1 or more vision services used for image classifications or detections. |
 | `window_seconds_before` | float64 | Optional | The size of the time window (in seconds) before the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds preceding the condition being met. If all window attributes are 0 (or omitted), no surrounding images are buffered and only the image that triggered the condition is captured. |
 | `window_seconds_after` | float64 | Optional | The size of the time window (in seconds) after the condition is met, during which images are buffered. This allows you to see the photos taken in the specified number of seconds after the condition being met. If all window attributes are 0 (or omitted), no surrounding images are buffered and only the image that triggered the condition is captured. |

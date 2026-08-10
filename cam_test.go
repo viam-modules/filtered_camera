@@ -17,6 +17,7 @@ import (
 	"go.viam.com/rdk/utils"
 	"go.viam.com/rdk/vision/classification"
 	"go.viam.com/rdk/vision/objectdetection"
+	"go.viam.com/rdk/vision/viscapture"
 
 	imagebuffer "github.com/viam-modules/filtered_camera/image_buffer"
 
@@ -278,12 +279,35 @@ func TestValidate(t *testing.T) {
 	res, _, err := conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
-	test.That(t, err.Error(), test.ShouldContainSubstring, "\"camera\" is required")
+	test.That(t, err.Error(), test.ShouldContainSubstring, "must specify one of \"camera\" or \"image_vision_service\"")
 	conf.Camera = "foo"
 	res, _, err = conf.Validate(".")
 	test.That(t, res, test.ShouldBeNil)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "\"vision_services\" is required")
+
+	// should error if both camera and image_vision_service are set
+	conf.ImageVisionService = "image_source_vision"
+	res, _, err = conf.Validate(".")
+	test.That(t, res, test.ShouldBeNil)
+	test.That(t, err, test.ShouldNotBeNil)
+	test.That(t, err.Error(), test.ShouldContainSubstring, "cannot specify both \"camera\" and \"image_vision_service\"")
+	conf.Camera = ""
+
+	// image_vision_service alone can satisfy the image source requirement
+	conf.VisionServices = []VisionServiceConfig{
+		{
+			Vision:          "foo",
+			Classifications: map[string]float64{"a": .8},
+		},
+	}
+	res, _, err = conf.Validate(".")
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldResemble, []string{"image_source_vision", "foo"})
+	conf.ImageVisionService = ""
+	conf.VisionServices = nil
+	conf.Camera = "foo"
 
 	conf.Vision = "foo"
 	res, _, err = conf.Validate(".")
@@ -434,6 +458,50 @@ func TestImages(t *testing.T) {
 	test.That(t, res, test.ShouldNotBeNil)
 	test.That(t, len(res), test.ShouldEqual, 1) // The annotated trigger image
 	test.That(t, meta, test.ShouldNotBeNil)
+}
+
+func TestImagesFromVisionServiceSource(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+
+	imgA, _ := camera.NamedImageFromImage(a, "manipulated", "image/jpeg", data.Annotations{})
+
+	imageSourceSvc := inject.NewVisionService("image_source_vision")
+	imageSourceSvc.CaptureAllFromCameraFunc = func(
+		ctx context.Context, cameraName string, opts viscapture.CaptureOptions, extra map[string]interface{},
+	) (viscapture.VisCapture, error) {
+		test.That(t, opts.ReturnImage, test.ShouldBeTrue)
+		return viscapture.VisCapture{Image: &imgA}, nil
+	}
+
+	fc := &filteredCamera{
+		conf: &Config{
+			Classifications: map[string]float64{"a": .8},
+			Objects:         map[string]float64{"b": .8},
+			WindowSeconds:   10,
+			ImageFrequency:  1.0,
+		},
+		logger: logger,
+		otherVisionServices: []vision.Service{
+			getDummyVisionService(),
+		},
+		buf:                     imagebuffer.NewImageBuffer(10, 1.0, 0, 0, logging.NewTestLogger(t), true, 0),
+		imageVisionService:      imageSourceSvc,
+		acceptedClassifications: map[string]map[string]float64{"": {"a": .8}},
+		acceptedObjects:         map[string]map[string]float64{"": {"b": .8}},
+	}
+
+	ctx := context.Background()
+
+	res, meta, err := fc.Images(ctx, nil, map[string]interface{}{data.FromDMString: true})
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, res, test.ShouldNotBeNil)
+	test.That(t, len(res), test.ShouldEqual, 1)
+	test.That(t, meta, test.ShouldNotBeNil)
+
+	// Properties should return safe defaults since there's no underlying camera dependency.
+	props, err := fc.Properties(ctx)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, props.SupportsPCD, test.ShouldBeFalse)
 }
 
 func TestImageWithBufferedImages(t *testing.T) {

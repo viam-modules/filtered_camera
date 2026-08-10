@@ -26,3 +26,4 @@ filtered-camera
 foo.json
 module.tar.gz
 .canon.yaml
+.VIAM_RELOAD_ARCHIVE.tar.gz
