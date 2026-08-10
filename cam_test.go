@@ -1631,6 +1631,6 @@ func TestToSendStaysBoundedWhenNobodyConsumes(t *testing.T) {
 		fc.captureImageInBackground(ctx)
 	}
 
-	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, fc.buf.GetMaxToSend())
-	test.That(t, fc.buf.GetToSendDropped(), test.ShouldEqual, 1024-fc.buf.GetMaxToSend())
+	test.That(t, fc.buf.GetToSendLength(), test.ShouldEqual, fc.buf.GetMaxToSendImages())
+	test.That(t, fc.buf.GetToSendDropped(), test.ShouldEqual, 1024-fc.buf.GetMaxToSendImages())
 }

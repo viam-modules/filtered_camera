@@ -43,10 +43,10 @@ type ImageBuffer struct {
 	debug               bool
 	// toSendMaxWarningThreshold is the threshold for warning about ToSend buffer size
 	toSendMaxWarningThreshold int
-	// maxToSend is the hard cap on the ToSend buffer. Unlike ringBuffer, ToSend is only
+	// maxToSendImages is the hard cap on the ToSend buffer. Unlike ringBuffer, ToSend is only
 	// drained when a consumer asks for images, so without a cap a consumer that runs
 	// slower than imageFrequency grows it until the module runs out of memory.
-	maxToSend int
+	maxToSendImages int
 	// toSendAtCap tracks whether we are currently shedding images, so the drop is
 	// reported on the way in rather than once per dropped image.
 	toSendAtCap bool
@@ -82,7 +82,7 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		// Set warning threshold to 2x expected buffer size to detect when consumption is lagging,
 		// with a floor so zero-window configs don't warn on every trigger image
 		toSendMaxWarningThreshold: max(maxImages*2, minToSendWarningThreshold),
-		maxToSend:                 max(maxImages*toSendMaxImagesFactor, minToSendMaxImages),
+		maxToSendImages:           max(maxImages*toSendMaxImagesFactor, minToSendMaxImages),
 	}
 }
 
@@ -111,7 +111,7 @@ func (ib *ImageBuffer) manageImageBufferCapLocked() {
 	toSendLen := len(ib.toSend)
 
 	// Below the warning threshold is also below the hard cap, since
-	// toSendMaxWarningThreshold is always <= maxToSend.
+	// toSendMaxWarningThreshold is always <= maxToSendImages.
 	if toSendLen <= ib.toSendMaxWarningThreshold {
 		ib.toSendOverThreshold = false
 		ib.toSendAtCap = false
@@ -124,12 +124,12 @@ func (ib *ImageBuffer) manageImageBufferCapLocked() {
 			toSendLen, ib.toSendMaxWarningThreshold)
 	}
 
-	if toSendLen <= ib.maxToSend {
+	if toSendLen <= ib.maxToSendImages {
 		ib.toSendAtCap = false
 		return
 	}
 
-	dropped := toSendLen - ib.maxToSend
+	dropped := toSendLen - ib.maxToSendImages
 	// Copy into a fresh backing array rather than re-slicing, so the dropped images
 	// (and the pixel data they hold) actually become collectable.
 	ib.toSend = append([]CachedData{}, ib.toSend[dropped:]...)
@@ -139,7 +139,7 @@ func (ib *ImageBuffer) manageImageBufferCapLocked() {
 		ib.toSendAtCap = true
 		ib.logger.Errorf("ToSend buffer reached its hard limit of %d images; dropping the oldest images to stay within memory. "+
 			"Images are being captured faster than they are consumed - lower attribute \"image_frequency\" or capture data more often.",
-			ib.maxToSend)
+			ib.maxToSendImages)
 	}
 }
 
@@ -240,11 +240,11 @@ func (ib *ImageBuffer) GetToSendLength() int {
 	return len(ib.toSend)
 }
 
-// GetMaxToSend returns the hard cap on the toSend slice
-func (ib *ImageBuffer) GetMaxToSend() int {
+// GetMaxToSendImages returns the hard cap on the toSend slice
+func (ib *ImageBuffer) GetMaxToSendImages() int {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
-	return ib.maxToSend
+	return ib.maxToSendImages
 }
 
 // GetToSendDropped returns how many images have been discarded because toSend was full
