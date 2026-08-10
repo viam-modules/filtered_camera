@@ -15,6 +15,11 @@ const (
 	// minToSendWarningThreshold is the smallest ToSend buffer size that can
 	// trigger a lagging-consumption warning.
 	minToSendWarningThreshold = 10
+	// toSendMaxImagesFactor scales the ToSend hard cap off the expected buffer size.
+	// It sits well above toSendMaxWarningThreshold so the warning always fires first.
+	toSendMaxImagesFactor = 5
+	// minToSendMaxImages is the smallest hard cap placed on the ToSend buffer.
+	minToSendMaxImages = 100
 )
 
 type CachedData struct {
@@ -38,6 +43,19 @@ type ImageBuffer struct {
 	debug               bool
 	// toSendMaxWarningThreshold is the threshold for warning about ToSend buffer size
 	toSendMaxWarningThreshold int
+	// maxToSendImages is the hard cap on the ToSend buffer. Unlike ringBuffer, ToSend is only
+	// drained when a consumer asks for images, so without a cap a consumer that runs
+	// slower than imageFrequency grows it until the module runs out of memory.
+	maxToSendImages int
+	// toSendAtCap tracks whether we are currently shedding images, so the drop is
+	// reported on the way in rather than once per dropped image.
+	toSendAtCap bool
+	// toSendOverThreshold tracks whether the lagging-consumption warning has already
+	// been reported for the current episode. A backed-up buffer stays backed up, so
+	// warning per image buries everything else in the log.
+	toSendOverThreshold bool
+	// toSendDropped counts images discarded because the ToSend cap was reached.
+	toSendDropped int
 }
 
 func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefore int, windowSecondsAfter int, logger logging.Logger, debug bool, cooldownSecs int) *ImageBuffer {
@@ -64,6 +82,64 @@ func NewImageBuffer(windowSeconds int, imageFrequency float64, windowSecondsBefo
 		// Set warning threshold to 2x expected buffer size to detect when consumption is lagging,
 		// with a floor so zero-window configs don't warn on every trigger image
 		toSendMaxWarningThreshold: max(maxImages*2, minToSendWarningThreshold),
+		maxToSendImages:           max(maxImages*toSendMaxImagesFactor, minToSendMaxImages),
+	}
+}
+
+// withinCaptureWindowLocked reports whether now falls inside the currently open capture
+// window. Callers must hold ib.mu.
+//
+// captureFrom and captureTill are the zero time until MarkShouldSend opens the first
+// window, and a camera that does not populate ResponseMetadata hands us a zero
+// CapturedAt. Comparing those two with Equal reports "inside the window" for a window
+// that was never opened, so both are rejected up front.
+func (ib *ImageBuffer) withinCaptureWindowLocked(now time.Time) bool {
+	if ib.captureTill.IsZero() || now.IsZero() {
+		return false
+	}
+	return !now.Before(ib.captureFrom) && !now.After(ib.captureTill)
+}
+
+// manageImageBufferCapLocked warns about a lagging consumer and sheds the oldest images
+// once ToSend passes its hard cap. Both reports fire once per episode rather than once
+// per image: the buffer stays backed up for as long as the consumer is behind, so
+// per-image logging is what buried the real failure in the crash log.
+//
+// Shedding the oldest images keeps the module alive; letting the buffer grow costs the
+// whole process, and with it every image already buffered. Callers must hold ib.mu.
+func (ib *ImageBuffer) manageImageBufferCapLocked() {
+	toSendLen := len(ib.toSend)
+
+	// Below the warning threshold is also below the hard cap, since
+	// toSendMaxWarningThreshold is always <= maxToSendImages.
+	if toSendLen <= ib.toSendMaxWarningThreshold {
+		ib.toSendOverThreshold = false
+		ib.toSendAtCap = false
+		return
+	}
+
+	if !ib.toSendOverThreshold {
+		ib.toSendOverThreshold = true
+		ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.",
+			toSendLen, ib.toSendMaxWarningThreshold)
+	}
+
+	if toSendLen <= ib.maxToSendImages {
+		ib.toSendAtCap = false
+		return
+	}
+
+	dropped := toSendLen - ib.maxToSendImages
+	// Copy into a fresh backing array rather than re-slicing, so the dropped images
+	// (and the pixel data they hold) actually become collectable.
+	ib.toSend = append([]CachedData{}, ib.toSend[dropped:]...)
+	ib.toSendDropped += dropped
+
+	if !ib.toSendAtCap {
+		ib.toSendAtCap = true
+		ib.logger.Errorf("ToSend buffer reached its hard limit of %d images; dropping the oldest images to stay within memory. "+
+			"Images are being captured faster than they are consumed - lower attribute \"image_frequency\" or capture data more often.",
+			ib.maxToSendImages)
 	}
 }
 
@@ -113,6 +189,7 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 
 	// Add the images to send
 	ib.toSend = append(ib.toSend, imagesToSend...)
+	ib.manageImageBufferCapLocked()
 
 	toSendLen := len(ib.toSend)
 	if ib.debug {
@@ -125,12 +202,6 @@ func (ib *ImageBuffer) MarkShouldSend(triggerTime time.Time) {
 			"imagesAdded", len(imagesToSend),
 			"toSendSize", toSendLen,
 			"ringBufferSize", len(ib.ringBuffer))
-	}
-
-	// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
-	if toSendLen > ib.toSendMaxWarningThreshold {
-		ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.",
-			toSendLen, ib.toSendMaxWarningThreshold)
 	}
 }
 
@@ -169,32 +240,18 @@ func (ib *ImageBuffer) GetToSendLength() int {
 	return len(ib.toSend)
 }
 
-// PopFirstToSend removes and returns the first element from toSend slice
-func (ib *ImageBuffer) PopFirstToSend() (CachedData, bool) {
+// GetMaxToSendImages returns the hard cap on the toSend slice
+func (ib *ImageBuffer) GetMaxToSendImages() int {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
-	if len(ib.toSend) == 0 {
-		if ib.debug {
-			ib.logger.Infow("PopFirstToSend buffer empty",
-				"method", "PopFirstToSend",
-				"toSendSize", 0)
-		}
-		return CachedData{}, false
-	}
-	x := ib.toSend[0]
-	ib.toSend = ib.toSend[1:]
+	return ib.maxToSendImages
+}
 
-	// Apply timestamp naming to the images
-	x.Imgs = TimestampImagesToNames(x.Imgs, x.Meta)
-
-	if ib.debug {
-		remainingLen := len(ib.toSend)
-		ib.logger.Infow("PopFirstToSend consumed image",
-			"method", "PopFirstToSend",
-			"imagesConsumed", 1,
-			"remainingToSendSize", remainingLen)
-	}
-	return x, true
+// GetToSendDropped returns how many images have been discarded because toSend was full
+func (ib *ImageBuffer) GetToSendDropped() int {
+	ib.mu.Lock()
+	defer ib.mu.Unlock()
+	return ib.toSendDropped
 }
 
 // TimestampImagesToNames converts images to have timestamp-based names in format "[timestamp]_[original_name]"
@@ -314,7 +371,7 @@ func (ib *ImageBuffer) IsInCooldown(now time.Time) bool {
 func (ib *ImageBuffer) IsWithinCaptureWindow(now time.Time) bool {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
-	withinWindow := (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom)
+	withinWindow := ib.withinCaptureWindowLocked(now)
 
 	if ib.debug {
 		ib.logger.Infow("IsWithinCaptureWindow check",
@@ -336,21 +393,16 @@ func (ib *ImageBuffer) StoreImages(images []camera.NamedImage, meta resource.Res
 
 	// if we're within the CaptureTill trigger time still, directly add the images to ToSend buffer
 	// else then store them in the ring buffer
-	if (now.Before(ib.captureTill) && now.After(ib.captureFrom)) || now.Equal(ib.captureTill) || now.Equal(ib.captureFrom) {
+	if ib.withinCaptureWindowLocked(now) {
 		cd := CachedData{Imgs: images, Meta: meta}
 		ib.toSend = append(ib.toSend, cd)
+		ib.manageImageBufferCapLocked()
 		toSendLen := len(ib.toSend)
 		if ib.debug {
 			ib.logger.Infow("StoreImages: stored image to ToSend buffer",
 				"method", "StoreImages",
 				"withinCaptureWindow", true,
 				"toSendSize", toSendLen)
-		}
-
-		// Warn if ToSend buffer is getting too large (always warn, regardless of debug setting)
-		if toSendLen > ib.toSendMaxWarningThreshold {
-			ib.logger.Warnf("ToSend buffer size (%d) exceeds warning threshold (%d). Images may be filling buffer faster than they are being consumed. Consider changing attribute \"image_frequency\" to match data capture frequency or slower.",
-				toSendLen, ib.toSendMaxWarningThreshold)
 		}
 	} else {
 		// Add to ring buffer (reuse existing logic)

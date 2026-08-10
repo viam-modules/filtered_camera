@@ -124,23 +124,17 @@ func (cc *conditionalCamera) Status(ctx context.Context) (map[string]interface{}
 }
 
 func (cc *conditionalCamera) Images(ctx context.Context, filterSourceNames []string, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-	return cc.images(ctx, extra, false) // false indicates multiple images mode
+	return cc.images(ctx, extra)
 }
 
-func (cc *conditionalCamera) getBufferedImages(singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, bool) {
-	if singleImageMode {
-		if x, ok := cc.buf.PopFirstToSend(); ok {
-			return x.Imgs, x.Meta, true
-		}
-	} else {
-		if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
-			return allImages, batchMeta, true
-		}
+func (cc *conditionalCamera) getBufferedImages() ([]camera.NamedImage, resource.ResponseMetadata, bool) {
+	if allImages, batchMeta, ok := cc.buf.PopAllToSend(); ok {
+		return allImages, batchMeta, true
 	}
 	return nil, resource.ResponseMetadata{}, false
 }
 
-func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}, singleImageMode bool) ([]camera.NamedImage, resource.ResponseMetadata, error) {
+func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interface{}) ([]camera.NamedImage, resource.ResponseMetadata, error) {
 	images, meta, err := cc.cam.Images(ctx, nil, nil)
 	if err != nil {
 		return images, meta, err
@@ -152,7 +146,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 
 	// If we're still within an active capture window, skip filter checks
 	if cc.buf.IsWithinCaptureWindow(meta.CapturedAt) {
-		if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(singleImageMode); ok {
+		if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(); ok {
 			return bufferedImages, bufferedMeta, nil
 		}
 		// If no buffered images, return current image (we're in capture mode)
@@ -162,7 +156,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	// If we're in the cooldown period after a capture window, suppress new triggers
 	if cc.buf.IsInCooldown(meta.CapturedAt) {
 		// Still return any remaining buffered images from the previous trigger
-		if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(singleImageMode); ok {
+		if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(); ok {
 			return bufferedImages, bufferedMeta, nil
 		}
 		return nil, meta, data.ErrNoCaptureToStore
@@ -182,7 +176,7 @@ func (cc *conditionalCamera) images(ctx context.Context, extra map[string]interf
 	}
 
 	// Try to get buffered images
-	if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(singleImageMode); ok {
+	if bufferedImages, bufferedMeta, ok := cc.getBufferedImages(); ok {
 		return bufferedImages, bufferedMeta, nil
 	}
 	return nil, meta, data.ErrNoCaptureToStore

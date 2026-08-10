@@ -21,6 +21,8 @@ You are also able to customize the time before and the time after the capture cr
 
 The filtered camera uses a background worker that continuously captures images from the underlying camera at the specified frequency and stores them in a ring buffer. When trigger conditions are met, relevant images from the time window are moved to a send buffer for data management retrieval.
 
+Both buffers are bounded. The send buffer is only drained when data management asks for images, so if `image_frequency` is higher than your data capture frequency it will fill up. The module warns once when it passes its warning threshold and, if it reaches its hard limit, logs an error and discards the oldest images to protect the rest of the module. Seeing either message means `image_frequency` is set faster than the images are being consumed.
+
 When images are captured and buffered for data management, each image receives a timestamp-based name in the format `[timestamp]_[original_name]` to preserve capture timing information and ensure chronological ordering during data sync.
 
 **Annotations**: When a trigger condition is met, the image that triggered the capture includes the detection or classification annotations (bounding boxes or classification labels) that caused the trigger. Buffered images from before and after the trigger do not include annotations, only the trigger image itself is annotated. This allows you to easily identify which image in a capture sequence was the one that met your filter criteria.
@@ -73,13 +75,12 @@ Remove the "classifications" or "objects" section depending on if your ML model 
 > Instead of `camera`, you can set `image_vision_service` to the name of a vision service to use as the image source, useful when that vision service manipulates the underlying camera image (for example, cropping, blurring, or annotating it). `camera` and `image_vision_service` are mutually exclusive.
 
 > [!NOTE]
-> The filtered camera can be configured with both `ReadImage` and `Images` methods for data management. The camera detects data management calls through context and extra parameters to apply filtering only when appropriate.
+> The filtered camera detects data management calls through context and extra parameters, so it applies filtering only when appropriate.
 
 > [!NOTE]
 > The filtered camera behaves differently depending on how it's called:
 > - **Data management calls**: Apply filtering and return buffered images with timestamp-based names
 > - **Non-data management calls**: Bypass filtering and return images directly from the underlying camera
-> - **`Image()` method**: Returns a single image from the buffer  
 > - **`Images()` method**: Returns all available images from the buffer in chronological order
 
 > [!NOTE]

@@ -2,7 +2,7 @@
     "module_id": "viam:filtered-camera",
     "visibility": "public",
     "url": "https://github.com/viam-modules/filtered_camera",
-    "description": "a filtered camera",
+    "description": "Filter captured data to selectively store only the data that meets certain criteria.",
     "models": [
         {
             "api": "rdk:component:camera",
@@ -19,6 +19,7 @@
     ],
     "build": {
         "build": "make module.tar.gz",
+        "path": "module.tar.gz",
         "arch" : ["linux/amd64", "linux/arm64", "darwin/arm64", "windows/amd64"]
     },
     "entrypoint": "filtered-camera"

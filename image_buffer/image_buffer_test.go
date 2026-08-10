@@ -185,3 +185,84 @@ func TestCooldownExtendsWithRetrigger(t *testing.T) {
 	test.That(t, buf.IsInCooldown(newCooldownTill), test.ShouldBeTrue)             // at boundary
 	test.That(t, buf.IsInCooldown(newCooldownTill.Add(1*time.Second)), test.ShouldBeFalse)
 }
+
+// TestZeroTimeIsNotWithinCaptureWindow covers the crash where a source camera that left
+// ResponseMetadata.CapturedAt unset made every frame land in the unbounded ToSend
+// buffer: before any trigger, captureFrom/captureTill are also the zero time, so the
+// inclusive boundary check reported "inside the window" for a window never opened.
+func TestZeroTimeIsNotWithinCaptureWindow(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	buf := NewImageBuffer(20, 1.0, 0, 0, logger, true, 0)
+
+	var zero time.Time
+	test.That(t, buf.IsWithinCaptureWindow(zero), test.ShouldBeFalse)
+	test.That(t, buf.IsWithinCaptureWindow(time.Now()), test.ShouldBeFalse)
+
+	// Unstamped frames must go to the bounded ring buffer, not to ToSend.
+	for i := 0; i < 500; i++ {
+		buf.StoreImages(nil, resource.ResponseMetadata{}, zero)
+	}
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, 0)
+	test.That(t, buf.GetRingBufferLength(), test.ShouldBeLessThanOrEqualTo, buf.maxImages)
+
+	// An open window still must not swallow unstamped frames.
+	now := time.Now()
+	buf.MarkShouldSend(now)
+	test.That(t, buf.IsWithinCaptureWindow(zero), test.ShouldBeFalse)
+	test.That(t, buf.IsWithinCaptureWindow(now), test.ShouldBeTrue)
+}
+
+// TestToSendIsBounded covers the other half of the crash: ToSend had no cap, so a
+// consumer slower than image_frequency grew it until the module ran out of memory.
+func TestToSendIsBounded(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	buf := NewImageBuffer(20, 1.0, 0, 0, logger, false, 0)
+
+	maxToSendImages := buf.GetMaxToSendImages()
+	test.That(t, maxToSendImages, test.ShouldBeGreaterThan, buf.toSendMaxWarningThreshold)
+
+	// Open a capture window wide enough that every frame below is inside it.
+	start := time.Now()
+	buf.MarkShouldSend(start)
+
+	// Produce far more than the cap without ever consuming, as the crashed machine did.
+	total := maxToSendImages * 3
+	for i := 0; i < total; i++ {
+		buf.SetCaptureTill(start.Add(time.Hour))
+		buf.StoreImages(nil, resource.ResponseMetadata{CapturedAt: start.Add(time.Duration(i) * time.Millisecond)},
+			start.Add(time.Duration(i)*time.Millisecond))
+	}
+
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, maxToSendImages)
+	test.That(t, buf.GetToSendDropped(), test.ShouldEqual, total-maxToSendImages)
+
+	// The retained images must be the newest ones; the oldest are what got shed.
+	toSend := buf.GetToSendSlice()
+	test.That(t, toSend[len(toSend)-1].Meta.CapturedAt,
+		test.ShouldEqual, start.Add(time.Duration(total-1)*time.Millisecond))
+	test.That(t, toSend[0].Meta.CapturedAt,
+		test.ShouldEqual, start.Add(time.Duration(total-maxToSendImages)*time.Millisecond))
+}
+
+// TestMarkShouldSendRespectsToSendCap makes sure the ring-buffer drain path is capped
+// too, not just the direct StoreImages path.
+func TestMarkShouldSendRespectsToSendCap(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+	buf := NewImageBuffer(20, 1.0, 0, 0, logger, false, 0)
+
+	maxToSendImages := buf.GetMaxToSendImages()
+	now := time.Now()
+
+	// Stuff the ring buffer past the ToSend cap, all inside the window MarkShouldSend
+	// will open, so a single trigger tries to promote all of them at once.
+	ring := make([]CachedData, 0, maxToSendImages*2)
+	for i := 0; i < maxToSendImages*2; i++ {
+		ring = append(ring, CachedData{Meta: resource.ResponseMetadata{CapturedAt: now.Add(time.Duration(-i) * time.Millisecond)}})
+	}
+	buf.ringBuffer = ring
+
+	buf.MarkShouldSend(now)
+
+	test.That(t, buf.GetToSendLength(), test.ShouldEqual, maxToSendImages)
+	test.That(t, buf.GetToSendDropped(), test.ShouldEqual, maxToSendImages)
+}
