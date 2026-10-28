@@ -1,14 +1,14 @@
 module github.com/viam-modules/filtered_camera
 
-go 1.26.0
+go 1.26.10
 
 require (
 	github.com/pkg/errors v0.9.1
 	github.com/rhysd/actionlint v1.7.8
 	go.opentelemetry.io/otel v1.45.0
-	go.viam.com/rdk v1.13.0
+	go.viam.com/rdk v1.14.0
 	go.viam.com/test v1.2.5
-	go.viam.com/utils v0.15.1
+	go.viam.com/utils v0.16.1
 )
 
 require (
@@ -79,7 +79,6 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.5.0 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
 	github.com/dgottlieb/smarty-assertions v1.2.6 // indirect
@@ -94,7 +93,7 @@ require (
 	github.com/fogleman/gg v1.3.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fullstorydev/grpcurl v1.8.6 // indirect
-	github.com/gen2brain/malgo v0.11.24 // indirect
+	github.com/gen2brain/malgo v0.11.26 // indirect
 	github.com/go-co-op/gocron/v2 v2.18.0 // indirect
 	github.com/go-gl/mathgl v1.0.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
@@ -131,7 +130,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/kellydunn/golang-geo v0.7.0 // indirect
-	github.com/klauspost/compress v1.18.6 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/kylelemons/go-gypsy v1.0.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
@@ -156,30 +155,30 @@ require (
 	github.com/muesli/kmeans v0.3.1 // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/petermattis/goid v0.0.0-20260330135022-df67b199bc81 // indirect
-	github.com/pion/datachannel v1.5.10 // indirect
+	github.com/pion/datachannel v1.6.3 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
-	github.com/pion/dtls/v3 v3.1.4 // indirect
-	github.com/pion/ice/v4 v4.0.13 // indirect
-	github.com/pion/interceptor v0.1.42 // indirect
+	github.com/pion/dtls/v3 v3.1.10 // indirect
+	github.com/pion/ice/v4 v4.4.7 // indirect
+	github.com/pion/interceptor v0.1.49 // indirect
 	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/mdns v0.0.12 // indirect
-	github.com/pion/mdns/v2 v2.1.0 // indirect
-	github.com/pion/mediadevices v0.10.0 // indirect
+	github.com/pion/mdns/v2 v2.2.2 // indirect
+	github.com/pion/mediadevices v0.10.1 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/rtcp v1.2.16 // indirect
-	github.com/pion/rtp v1.8.26 // indirect
-	github.com/pion/sctp v1.8.41 // indirect
-	github.com/pion/sdp/v3 v3.0.16 // indirect
+	github.com/pion/rtcp v1.2.19 // indirect
+	github.com/pion/rtp v1.10.5 // indirect
+	github.com/pion/sctp v1.12.0 // indirect
+	github.com/pion/sdp/v3 v3.0.20 // indirect
 	github.com/pion/srtp/v2 v2.0.20 // indirect
-	github.com/pion/srtp/v3 v3.0.9 // indirect
+	github.com/pion/srtp/v3 v3.1.3 // indirect
 	github.com/pion/stun v0.6.1 // indirect
-	github.com/pion/stun/v3 v3.1.5 // indirect
+	github.com/pion/stun/v4 v4.0.1 // indirect
 	github.com/pion/transport/v2 v2.2.10 // indirect
 	github.com/pion/transport/v3 v3.1.1 // indirect
-	github.com/pion/transport/v4 v4.0.2 // indirect
+	github.com/pion/transport/v5 v5.1.1 // indirect
 	github.com/pion/turn/v2 v2.1.6 // indirect
-	github.com/pion/turn/v4 v4.1.3 // indirect
-	github.com/pion/webrtc/v4 v4.1.8 // indirect
+	github.com/pion/turn/v5 v5.1.2 // indirect
+	github.com/pion/webrtc/v4 v4.2.23 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
@@ -193,7 +192,7 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	github.com/srikrsna/protoc-gen-gotag v0.6.2 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
@@ -231,7 +230,8 @@ require (
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
-	go.viam.com/api v0.1.597 // indirect
+	go.viam.com/api v0.1.602 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230525183740-e7c30c78aeb2 // indirect
 	goji.io v2.0.2+incompatible // indirect
